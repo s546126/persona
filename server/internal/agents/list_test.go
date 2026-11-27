@@ -2,8 +2,10 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -139,5 +141,147 @@ func TestPersonalAgentsRejectRuntimeSearch(t *testing.T) {
 		if err := read(); !errors.As(err, &typed) || typed.Code != "invalid_query" {
 			t.Fatalf("runtime search reached personal provider: %v", err)
 		}
+	}
+}
+
+// pinFixture is one source of n sessions, s0 the newest and s<n-1> the oldest.
+func pinFixture(n int) (*Service, *[][]string) {
+	sessions := make([]AgentSession, n)
+	for i := range sessions {
+		sessions[i] = AgentSession{SessionKey: fmt.Sprintf("s%d", i), RankTimeMs: int64(10_000 - i)}
+	}
+	var changes [][]string
+	return NewService(nil, func(ids []string) { changes = append(changes, ids) }, nil,
+		&memSource{name: "demo", sessions: sessions}), &changes
+}
+
+func pageIDs(t *testing.T, p sessionlist.Page) []string {
+	t.Helper()
+	ids := make([]string, len(p.Sessions))
+	for i, raw := range p.Sessions {
+		var row Session
+		if err := json.Unmarshal(raw.(json.RawMessage), &row); err != nil {
+			t.Fatalf("row %d: %v", i, err)
+		}
+		ids[i] = row.ID
+	}
+	return ids
+}
+
+func firstPage(t *testing.T, s *Service, limit int) []string {
+	t.Helper()
+	p, err := s.ListPage(context.Background(), sessionlist.Options{Limit: limit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pageIDs(t, p)
+}
+
+func TestPinnedSessionsLeadThePageInPinOrder(t *testing.T) {
+	s, _ := pinFixture(5)
+	if got := firstPage(t, s, 5); !slices.Equal(got, []string{"demo:s0", "demo:s1", "demo:s2", "demo:s3", "demo:s4"}) {
+		t.Fatalf("unpinned order: %v", got)
+	}
+	if _, err := s.PutPrefs(context.Background(), Prefs{Pins: []string{"demo:s3", "demo:s1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := firstPage(t, s, 5); !slices.Equal(got, []string{"demo:s3", "demo:s1", "demo:s0", "demo:s2", "demo:s4"}) {
+		t.Fatalf("pinned rows must lead in pin order, the rest newest first: %v", got)
+	}
+}
+
+func TestPinnedOldSessionReachesTheFirstPage(t *testing.T) {
+	s, _ := pinFixture(120)
+	if slices.Contains(firstPage(t, s, 50), "demo:s119") {
+		t.Fatal("fixture: the oldest row should start past the first page")
+	}
+	if _, err := s.PutPrefs(context.Background(), Prefs{Pins: []string{"demo:s119"}}); err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.ListPageWithCounts(context.Background(), sessionlist.Options{Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := pageIDs(t, p.Page)
+	if got[0] != "demo:s119" || got[1] != "demo:s0" || len(got) != 50 || p.Counts.Total != 120 {
+		t.Fatalf("pinned oldest row must top page 1: %v (total %d)", got[:3], p.Counts.Total)
+	}
+	// the rest of the list still pages through every other row once
+	seen := map[string]bool{}
+	for _, id := range got {
+		seen[id] = true
+	}
+	for cursor := p.NextCursor; cursor != ""; {
+		next, err := s.ListPage(context.Background(), sessionlist.Options{Limit: 50, Cursor: cursor})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range pageIDs(t, next) {
+			if seen[id] {
+				t.Fatalf("%s listed twice", id)
+			}
+			seen[id] = true
+		}
+		cursor = next.NextCursor
+	}
+	if len(seen) != 120 {
+		t.Fatalf("paged %d rows, want 120", len(seen))
+	}
+}
+
+func TestPinChangeReordersAtOnceAndTellsTheApps(t *testing.T) {
+	s, changes := pinFixture(4)
+	base, err := s.ListPage(context.Background(), sessionlist.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	*changes = nil
+	if _, err := s.PutPrefs(context.Background(), Prefs{Pins: []string{"demo:s2"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(*changes) != 1 {
+		t.Fatalf("a pin change must tell the apps once: %v", *changes)
+	}
+	// the index is reordered without waiting for a source refresh: a delta already carries the pinned row
+	delta, err := s.listIndex.Query(sessionlist.Options{Since: base.Revision})
+	if err != nil || !slices.Equal(pageIDs(t, delta), []string{"demo:s2"}) {
+		t.Fatalf("delta after pin: %v %v", delta, err)
+	}
+	full, err := s.listIndex.Query(sessionlist.Options{})
+	if err != nil || pageIDs(t, full)[0] != "demo:s2" {
+		t.Fatalf("index not reordered: %v %v", full, err)
+	}
+	// saving the same pins (a view change) does not reorder or notify
+	*changes = nil
+	if _, err := s.PutPrefs(context.Background(), Prefs{Pins: []string{"demo:s2"}, View: View{Sort: "name"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(*changes) != 0 {
+		t.Fatalf("unchanged pins notified: %v", *changes)
+	}
+	// unpinning puts the row back in its time order
+	if _, err := s.PutPrefs(context.Background(), Prefs{Pins: []string{}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := firstPage(t, s, 4); !slices.Equal(got, []string{"demo:s0", "demo:s1", "demo:s2", "demo:s3"}) {
+		t.Fatalf("unpinned row must go back to its place: %v", got)
+	}
+	if len(*changes) != 1 {
+		t.Fatalf("unpin must tell the apps: %v", *changes)
+	}
+}
+
+func TestPinKeepsHiddenSessionsOut(t *testing.T) {
+	s, _ := pinFixture(3)
+	firstPage(t, s, 3) // fill the cache Hide reads
+	if _, err := s.Hide(context.Background(), "demo:s1"); err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.PutPrefs(context.Background(), Prefs{Pins: []string{"demo:s1", "demo:s2"}})
+	if err != nil || p.Hidden["demo:s1"] == 0 {
+		t.Fatalf("PutPrefs dropped hidden: %+v %v", p, err)
+	}
+	if got := firstPage(t, s, 3); !slices.Equal(got, []string{"demo:s2", "demo:s0"}) {
+		t.Fatalf("hidden pinned row must stay out, the visible pin lead: %v", got)
 	}
 }

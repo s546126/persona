@@ -39,6 +39,8 @@ export interface PagedSessionListProps<T> {
   path: string;
   identity: (row: T) => string;
   compare: (a: T, b: T) => number;
+  /** What `compare` reads besides the rows (the personal list's pins): when it changes the loaded rows sort again. */
+  orderKey?: unknown;
   removeIdentity?: (id: string) => string;
   event: "sessions_list" | "agents";
   /** `within` and `group`: the group the row is listed under (Browse by a computer, project or space), so it need not
@@ -138,7 +140,7 @@ export function scrollParent(el: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
-export function PagedSessionList<T>({ root, path, identity, compare, removeIdentity, event, renderRow, personal = false, label, accountMark, providerOptions = [], machineOrder, catalog = false, justFinished = false, placeOf, activeAt, needsYou, isOpen, parentOf, excludeIdentities, grouping, failureText = sameText, holdCounts }: PagedSessionListProps<T>) {
+export function PagedSessionList<T>({ root, path, identity, compare, removeIdentity, event, renderRow, personal = false, label, accountMark, providerOptions = [], machineOrder, catalog = false, justFinished = false, placeOf, activeAt, needsYou, isOpen, parentOf, excludeIdentities, grouping, failureText = sameText, holdCounts, orderKey }: PagedSessionListProps<T>) {
   const [query, setQuery] = useState("");
   const [typed, setTyped] = useState("");
   // the sidebar's groupings take ⌘K's words (#6589); every other list its own field's, once typing pauses
@@ -198,6 +200,8 @@ export function PagedSessionList<T>({ root, path, identity, compare, removeIdent
   // The sidebar's list also lets go of it when the activity order is chosen (Settings › Agents), which has none.
   const sidebarList = Boolean(grouping);
   useLayoutEffect(() => { if (presentation || sidebarList) root.setPresentation(presentation); }, [root, presentation, sidebarList]);
+  // `compare` reads state of its own (the personal pins): the shown list sorts again when it changes
+  useLayoutEffect(() => { if (orderKey !== undefined) list.reorder(); }, [list, orderKey]);
   const page = useSyncExternalStore(list.subscribe, list.getSnapshot, list.getSnapshot);
   const [facets, setFacets] = useState<ListCounts | null>(null);
   const [facetError, setFacetError] = useState("");
@@ -488,8 +492,8 @@ export function PagedSessionList<T>({ root, path, identity, compare, removeIdent
   };
   const chooseGroup = (key: string) => setPicked(key ? groups.find((g) => g.key === key) ?? null : null);
   // an open section reads the collection as the list above it does
-  const source: GroupedSource<T> = useMemo(() => ({ path, identity, compare, removeIdentity, event, summary: summaryMode, roots: rootsMode, crossMachineHierarchy: crossMachineMode, parentOf, rowOrder, excludeIdentities, hold: Boolean(grouping?.hold) && Boolean(grouping?.byUpdate) }),
-    [path, identity, compare, removeIdentity, event, summaryMode, rootsMode, crossMachineMode, parentOf, rowOrder, excludeIdentities, grouping?.hold, grouping?.byUpdate]);
+  const source: GroupedSource<T> = useMemo(() => ({ path, identity, compare, orderKey, removeIdentity, event, summary: summaryMode, roots: rootsMode, crossMachineHierarchy: crossMachineMode, parentOf, rowOrder, excludeIdentities, hold: Boolean(grouping?.hold) && Boolean(grouping?.byUpdate) }),
+    [path, identity, compare, orderKey, removeIdentity, event, summaryMode, rootsMode, crossMachineMode, parentOf, rowOrder, excludeIdentities, grouping?.hold, grouping?.byUpdate]);
   const openRow = sections && isOpen && placeOf ? rootPage.rows.find(isOpen) : undefined;
   const autoMore = useRef(0);
   useEffect(() => {

@@ -22,8 +22,9 @@ func (s *Service) indexSessions(source string, list []Session) {
 	}
 	items := make([]sessionlist.Item, 0, len(list))
 	seen := make(map[string]bool, len(list))
-	// what the user removed stays out of the pages and the counts (hidden.go); read once per refresh, not per request
-	hidden := s.hiddenNow(context.Background())
+	// what the user removed stays out of the pages and the counts (hidden.go), and what they pinned leads them in pin
+	// order; prefs are read once per refresh, not per request
+	hidden, pins := s.listPrefsNow(context.Background())
 	for _, row := range list {
 		if row.ID == "" || seen[row.ID] || hiddenStill(row, hidden) {
 			continue
@@ -34,12 +35,16 @@ func (s *Service) indexSessions(source string, list []Session) {
 			state = "unread"
 		}
 		raw, _ := json.Marshal(row)
-		items = append(items, sessionlist.Item{
+		item := sessionlist.Item{
 			ID: row.ID, Source: source, Provider: row.Provider, Group: row.AccountID,
 			State: state, UpdatedAt: time.UnixMilli(row.RankTimeMs),
 			SearchText: strings.Join([]string{row.Title, row.Provider, row.AccountID}, "\n"),
 			Summary:    json.RawMessage(raw), Full: json.RawMessage(raw),
-		})
+		}
+		if at, ok := pins[row.ID]; ok {
+			item.Fold = &sessionlist.Fold{Pin: at} // pinned rows lead every page, however old
+		}
+		items = append(items, item)
 	}
 	s.listIndex.Replace(source, items)
 }

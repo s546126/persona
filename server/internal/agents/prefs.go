@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 )
@@ -138,12 +139,19 @@ func (s *prefsStore) update(ctx context.Context, change func(*Prefs) error) (Pre
 func (s *Service) Prefs(ctx context.Context) (Prefs, error) { return s.prefs.get(ctx) }
 
 // PutPrefs replaces the shared list preferences. Hidden conversations are changed only through Hide / Unhide: an app
-// that does not know them (an older one, the web's pin toggle) must not bring them back by saving its prefs.
+// that does not know them (an older one, the web's pin toggle) must not bring them back by saving its prefs. A change
+// of the pins reorders the paged list at once (pinned rows lead it, in pin order) and tells the apps to re-pull.
 func (s *Service) PutPrefs(ctx context.Context, p Prefs) (Prefs, error) {
-	return s.prefs.update(ctx, func(cur *Prefs) error {
+	var before []string
+	saved, err := s.prefs.update(ctx, func(cur *Prefs) error {
+		before = cur.Pins
 		hidden := cur.Hidden
 		*cur = p
 		cur.Hidden = hidden
 		return nil
 	})
+	if err == nil && !slices.Equal(before, saved.Pins) {
+		s.reindex()
+	}
+	return saved, err
 }

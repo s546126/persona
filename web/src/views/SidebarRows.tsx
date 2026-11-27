@@ -767,7 +767,7 @@ function BoundedPersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hove
   const accounts = useAccountGroups();
   if (!page.loaded || !page.rows.some((s) => !going.has(s.id))) return null;
   return <Section top title={t("sidebar.personal_agents")} folded={folded} onToggle={toggle} right={<GroupCount n={page.total} label={t("sidebar.agent_count", { count: page.total })} />}>
-    {!folded && <PagedSessionList root={personalSessions} path="/agents/sessions" identity={personalIdentity} compare={personalOrder} event="agents" personal label={accounts.label} accountMark={accounts.accountMark}
+    {!folded && <PagedSessionList root={personalSessions} path="/agents/sessions" identity={personalIdentity} compare={personalOrder} orderKey={prefs.pins} event="agents" personal label={accounts.label} accountMark={accounts.accountMark}
       renderRow={(s) => (going.has(s.id) ? null : <AgentRow s={s} reg={reg} hover={hover} active={activeKey === `a:${s.id}`} go={go} pinned={prefs.pins.includes(s.id)} onMenu={onMenu} />)} />}
     {rowMenu && <Menu anchor={rowMenu.el} onClose={() => setRowMenu(null)} align="right" width={200} items={agentRowItems(rowMenu.s, prefs)} />}
   </Section>;
@@ -913,18 +913,19 @@ export const AgentRow = memo(function AgentRow({ s, reg, hover, active, go, pinn
         onFocus={() => hover(k)}
         onBlur={() => hover(null)}
         aria-current={active ? "page" : undefined}
-        className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 sidebar-row transition-transform duration-150 active:scale-[0.98] [@media(hover:none)]:pr-11 [@media(pointer:coarse)]:min-h-11", active && cx(CURRENT_ROW, "pr-7"))}
+        className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 sidebar-row transition-transform duration-150 active:scale-[0.98] [@media(hover:none)]:pr-11 [@media(pointer:coarse)]:min-h-11", active && cx(CURRENT_ROW, "pr-7"), pinned && !active && "pr-7")}
       >
         <AgentAvatar s={s} size={16} />
         <span className={cx("min-w-0 flex-1 truncate text-[13px]", active || unread ? "font-medium text-ink" : "text-ink-2")}>{title}</span>
-        {unread && <span className={cx("flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white tabular-nums", !active && "group-hover/row:invisible")}>{s.unreadCount}</span>}
+        {unread && <span className={cx("flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white tabular-nums", !active && !pinned && "group-hover/row:invisible")}>{s.unreadCount}</span>}
       </a>
       <button
         type="button"
         title={pinned ? t("sidebar.unpin") : t("sidebar.pin")}
         aria-label={pinned ? t("sidebar.unpin") : t("sidebar.pin")}
+        aria-pressed={pinned}
         onClick={() => updateAgentPrefs((x) => togglePin(x, s.id))}
-        className={cx("absolute top-1/2 right-1 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-[5px] hover:bg-hover group-hover/row:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:hidden", active ? "opacity-100" : "opacity-0", pinned ? "text-accent" : "text-ink-3")}
+        className={cx("absolute top-1/2 right-1 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-[5px] hover:bg-hover group-hover/row:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:hidden", active || pinned ? "opacity-100" : "opacity-0", pinned ? "text-accent" : "text-ink-3")}
       >
         <Icon name="pin" size={11} />
       </button>

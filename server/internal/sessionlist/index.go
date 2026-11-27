@@ -79,6 +79,10 @@ type Fold struct {
 	BackgroundWaiting                 bool
 	HasLegacyFold                     bool
 	LegacyBackgroundWaiting           bool
+	// Pin is the item's place among the rows the user pinned (1 is the first), 0 for an unpinned row. Pinned rows
+	// sort before every other row of a full list or delta, in Pin order; the others keep the UpdatedAt order. Only
+	// the personal-Agent adapter sets it: runtime rows never pin, so their order is unchanged.
+	Pin int
 }
 
 // root is the session v is folded under ("" for none).
@@ -143,6 +147,14 @@ func (v *Item) matchesUnder(machine, session string) bool {
 		return v.Fold.DirectParent == session && pm == machine
 	}
 	return false
+}
+
+// pin is v's place among the pinned rows (0 for none).
+func (v *Item) pin() int {
+	if v.Fold == nil {
+		return 0
+	}
+	return v.Fold.Pin
 }
 
 // todo is the open to-do v is on ("" for none).
@@ -319,6 +331,7 @@ type cacheKey struct {
 
 type event struct {
 	id      string
+	pin     int // Fold.Pin of the row it shows (0 for none and for a removal): pinned rows come first
 	updated time.Time
 	value   *record // nil means a removal
 	added   bool    // created or newly entering the filter after a delta's baseline; full pages leave this false

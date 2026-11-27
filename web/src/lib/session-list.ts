@@ -134,7 +134,8 @@ type Work = { generation: number; load: boolean; more: boolean; kind: "load" | "
 class Rebaseline extends Error {}
 
 /** A lazy, bounded window over either session collection. Rows and snapshots are structurally shared.
- * `compare` must use the collection's newest-first transport order, not a presentation state/pin order.
+ * `compare` must use the collection's transport order (newest first; the personal list's hub pages put the pinned rows
+ * first, so its `compare` does too), not a presentation state order.
  * Rejected reads also set `error`; invalidation is fire-and-forget and records errors without rejecting globally.
  */
 export class SessionList<T> {
@@ -173,6 +174,8 @@ export class SessionList<T> {
   // `added` markers, but an identity already presented in this baseline belongs in the list again.
   private admitted = new Set<string>();
   private transport: T[] = [];
+  /** The next load reads a fresh baseline as deep as the shown window instead of a delta (rebase). */
+  private rebaseNext = false;
 
   constructor(
     private path: string,
@@ -210,6 +213,21 @@ export class SessionList<T> {
     if (!this.snapshot.loaded) return;
     const rows = this.snapshot.supported === false ? this.complete(this.snapshot.rows) : this.visible();
     this.publish({ rows });
+  }
+
+  /** Sort the loaded rows again after `compare` itself changed (the personal list's pins): no read, the same window. */
+  reorder(): void {
+    if (!this.snapshot.loaded || this.snapshot.supported === false) return;
+    this.publish({ rows: this.visible() });
+  }
+
+  /** The hub reordered its pages (the personal pins changed): a row that left the top may belong past the loaded
+   *  window, which a delta cannot say. Read a fresh view as deep as the one shown and swap it in (reread), once. */
+  rebase(): Promise<void> {
+    if (!this.snapshot.loaded || this.snapshot.supported === false) return Promise.resolve();
+    if (!this.snapshot.hasMore) return this.load(); // every row is loaded: their order is already the hub's
+    this.rebaseNext = true;
+    return this.load();
   }
 
   /** Changing projection invalidates its bound cursors, but preserves filters and does not start a read. */
@@ -309,6 +327,7 @@ export class SessionList<T> {
     clearTimeout(this.invalidationTimer); // undefined (none pending) is a no-op
     this.invalidationTimer = undefined;
     this.invalidatedAt = 0;
+    this.rebaseNext = false;
     this.clearBaseline();
   }
 
@@ -361,7 +380,10 @@ export class SessionList<T> {
           work.kind = next;
           this.publish({ loadingMore: next === "more" });
           if (next === "more") await this.readMore(work.generation);
-          else {
+          else if (this.rebaseNext && this.cursor) {
+            this.rebaseNext = false;
+            await this.reread(work.generation, this.prefixSize);
+          } else {
             await this.refresh(work.generation);
             // the next window counts from when this read came back, not when it went out: a slow read still leaves
             // the list idle between a busy fleet's reads

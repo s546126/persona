@@ -5,7 +5,7 @@
 // a section reads its own sessions while it is open, a page at a time, and stops when it is folded, so the groups of a
 // long list cost nothing until someone looks into one. By space on several computers, each computer is a section of
 // its own around its spaces (#13522); a space's heading starts a new Agent in its folder (#13523).
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { t } from "../../i18n";
 import { neverConnected } from "../../lib/add-computer";
 import { shortPath } from "../../lib/format";
@@ -41,6 +41,8 @@ export interface GroupedSource<T> {
   path: string;
   identity: (row: T) => string;
   compare: (a: T, b: T) => number;
+  /** What `compare` reads besides the rows (the personal pins): each section sorts its loaded rows again on a change. */
+  orderKey?: unknown;
   removeIdentity?: (id: string) => string;
   event: "sessions_list" | "agents";
   summary: boolean;
@@ -362,7 +364,7 @@ function GroupRows<T>({ group, dimension, scope, source, renderRow, onExcluded, 
   group: SessionGroup; dimension: GroupDimension; scope: ListFilters; source: GroupedSource<T>; renderRow: (row: T, within: GroupDimension, group: SessionGroup) => ReactNode; onExcluded?: (n: number) => void;
   heldRows: readonly T[]; hideIds?: ReadonlySet<string>; onRows?: (rows: readonly T[]) => void; priority: number;
 }) {
-  const { path, identity, compare, removeIdentity, event, summary, roots, crossMachineHierarchy, parentOf, rowOrder, excludeIdentities, hold = false } = source;
+  const { path, identity, compare, orderKey, removeIdentity, event, summary, roots, crossMachineHierarchy, parentOf, rowOrder, excludeIdentities, hold = false } = source;
   // rows only: the section's numbers are the ones its heading already has. A runtime section passes over the hints that
   // name none of its rows (#9176): with several open, each read for every agent's update anywhere.
   const follows = event === "sessions_list";
@@ -375,6 +377,7 @@ function GroupRows<T>({ group, dimension, scope, source, renderRow, onExcluded, 
   // the groups are built again with every read: the list follows what they select, not which object says it
   const selected = filterQuery({ ...scope, ...group.filters }, {});
   const filters = useMemo(() => ({ ...scope, ...group.filters }), [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { if (orderKey !== undefined) list.reorder(); }, [list, orderKey]);
   const page = useSyncExternalStore(list.subscribe, list.getSnapshot, list.getSnapshot);
   useEffect(() => {
     if (page.rows.length) onRows?.(page.rows);

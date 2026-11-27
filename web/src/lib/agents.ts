@@ -302,7 +302,21 @@ const emit = (p: Partial<ListState>) => {
 };
 
 let bounded = false;
-export const personalOrder = (a: AgentSession, b: AgentSession) => b.rankTimeMs - a.rankTimeMs || compareListIds(a.id, b.id);
+/** Each pinned session's place (0 first), rebuilt only when the pins change. */
+let pinRank: { pins: readonly string[]; at: Map<string, number> } = { pins: [], at: new Map() };
+const pinIndex = (pins: readonly string[]) => {
+  if (pinRank.pins !== pins) pinRank = { pins, at: new Map(pins.map((id, i) => [id, i])) };
+  return pinRank.at;
+};
+/** The hub's order of the personal-Agent pages: pinned sessions first, in pin order, then the rest newest first. */
+export function pinnedFirst(pins: readonly string[], a: AgentSession, b: AgentSession): number {
+  const at = pinIndex(pins);
+  const pa = at.get(a.id), pb = at.get(b.id);
+  if (pa !== undefined || pb !== undefined) return pa === undefined ? 1 : pb === undefined ? -1 : pa - pb;
+  return b.rankTimeMs - a.rankTimeMs || compareListIds(a.id, b.id);
+}
+/** The personal lists' order with the current pins (`prefs`): a pin or an unpin moves the row at once (emitPrefs). */
+export const personalOrder = (a: AgentSession, b: AgentSession) => pinnedFirst(prefs.pins, a, b);
 export const AGENTS_PAGE_COUNTS_FEATURE = "agents_page_counts";
 let pageCounts = false;
 /** Set from hello: whether this hub reads a personal page's counts with it (`with_counts`, #6496), one request per
@@ -567,7 +581,10 @@ let prefs: AgentPrefs = typeof localStorage === "undefined" ? emptyPrefs() : rea
 let hubPrefs = true;
 const prefListeners = new Set<() => void>();
 const emitPrefs = (p: AgentPrefs) => {
+  const repin = !samePins(prefs.pins, p.pins);
   prefs = p;
+  // the loaded rows follow the pins now; the hub's re-pull (it reorders its pages too) brings rows not loaded yet
+  if (repin) personalSessions.reorder();
   try {
     storeValue(PREFS_LS, JSON.stringify(p));
   } catch {
@@ -575,6 +592,8 @@ const emitPrefs = (p: AgentPrefs) => {
   }
   prefListeners.forEach((l) => l());
 };
+
+const samePins = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
 
 const prefsGone = (e: unknown) => {
   const status = (e as { status?: number }).status;
@@ -615,7 +634,11 @@ export function updateAgentPrefs(f: (p: AgentPrefs) => AgentPrefs) {
   const seq = ++saveSeq;
   prefsOut++;
   api<AgentPrefs>("/agents/prefs", { method: "PUT", json: next })
-    .then((p) => seq === saveSeq && emitPrefs(normalizePrefs(p)))
+    .then((p) => {
+      if (seq === saveSeq) emitPrefs(normalizePrefs(p));
+      // the hub reordered its pages before it answered: an unpinned row may now belong past the loaded rows
+      if (!samePins(before.pins, next.pins)) void personalSessions.rebase().catch(() => {});
+    })
     .catch((e) => {
       prefsGone(e);
       if (!hubPrefs) return; // a hub without the endpoint: the change stays here only

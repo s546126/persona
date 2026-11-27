@@ -203,6 +203,9 @@ func (f filters) matches(r *record) bool {
 
 func sortEvents(events []event) {
 	sort.Slice(events, func(a, b int) bool {
+		if pa, pb := events[a].pin, events[b].pin; pa != pb {
+			return pb == 0 || (pa != 0 && pa < pb) // pinned first, in pin order
+		}
 		if events[a].updated.Equal(events[b].updated) {
 			return events[a].id < events[b].id
 		}
@@ -326,7 +329,7 @@ func (i *Index) exactResult(f filters) *result {
 	r := &result{counts: emptyCounts(i.revisionToken(), f.Roots), ordered: true}
 	if item := i.items[f.ID]; f.matches(item) {
 		addCount(&r.counts, item.item, f, 1)
-		r.events = []event{{id: f.ID, updated: item.item.UpdatedAt, value: item}}
+		r.events = []event{{id: f.ID, pin: item.item.pin(), updated: item.item.UpdatedAt, value: item}}
 	}
 	return r
 }
@@ -369,7 +372,7 @@ func (i *Index) fullResult(f filters) *result {
 		if !f.matches(item) {
 			continue
 		}
-		r.events = append(r.events, event{id: id, updated: item.item.UpdatedAt, value: item})
+		r.events = append(r.events, event{id: id, pin: item.item.pin(), updated: item.item.UpdatedAt, value: item})
 	}
 	sortEvents(r.events)
 	return i.remember(key, r)
@@ -406,7 +409,7 @@ func (i *Index) queryResult(o Options) *result {
 			if before && reflect.DeepEqual(c.before.item, c.after.item) {
 				continue
 			}
-			r.events = append(r.events, event{id: id, updated: c.after.item.UpdatedAt, value: c.after, added: !before})
+			r.events = append(r.events, event{id: id, pin: c.after.item.pin(), updated: c.after.item.UpdatedAt, value: c.after, added: !before})
 		} else if before {
 			updated := c.before.item.UpdatedAt
 			if c.after != nil {

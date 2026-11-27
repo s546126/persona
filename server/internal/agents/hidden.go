@@ -31,6 +31,20 @@ func (s *Service) hiddenNow(ctx context.Context) map[string]int64 {
 	return p.Hidden
 }
 
+// listPrefsNow is what the paged index reads of the prefs: the hidden sessions and each pinned one's place (1 first).
+func (s *Service) listPrefsNow(ctx context.Context) (map[string]int64, map[string]int) {
+	p, err := s.prefs.get(ctx)
+	if err != nil {
+		s.logf("agents: prefs: %v", err)
+		return nil, nil
+	}
+	pins := make(map[string]int, len(p.Pins))
+	for i, id := range p.Pins {
+		pins[id] = i + 1
+	}
+	return p.Hidden, pins
+}
+
 // withoutHidden is list less what the user removed.
 func withoutHidden(list []Session, hidden map[string]int64) []Session {
 	if len(hidden) == 0 {
@@ -115,7 +129,7 @@ func trimHidden(h map[string]int64) {
 	}
 }
 
-// reindex rebuilds the paged index from the cached lists so a hide shows at once, and tells the apps to re-pull.
+// reindex rebuilds the paged index from the cached lists so a hide or a pin shows at once, and tells the apps to re-pull.
 func (s *Service) reindex() {
 	for _, src := range s.all() {
 		if list, ok := s.cache.getSessions(src.Name()); ok {

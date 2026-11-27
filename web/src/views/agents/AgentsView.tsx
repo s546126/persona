@@ -81,12 +81,12 @@ function BoundedAgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) 
     <Header title={t("agents-agentsview.title")} sub={t("agents-agentsview.subtitle")} onToggleSidebar={onToggleSidebar} />
     <div className="min-h-0 flex-1 overflow-y-auto"><div className={SESSION_LIST_STYLE.personalPage}>
       {loaded && !error && sessions.length > 0 && <SourceNotice hints={hints} />}
-      <PagedSessionList root={personalSessions} path="/agents/sessions" identity={personalIdentity} compare={personalOrder} event="agents" personal label={accounts.label} accountMark={accounts.accountMark} providerOptions={accounts.providerOptions} renderRow={(s) => <div className={SESSION_LIST_STYLE.personalRow}>
+      <PagedSessionList root={personalSessions} path="/agents/sessions" identity={personalIdentity} compare={personalOrder} orderKey={prefs.pins} event="agents" personal label={accounts.label} accountMark={accounts.accountMark} providerOptions={accounts.providerOptions} renderRow={(s) => <div className={SESSION_LIST_STYLE.personalRow}>
         <a href={href({ name: "agents", id: s.id })} onClick={(e) => onLinkClick(e, { name: "agents", id: s.id })} className="flex min-w-0 flex-1 items-center gap-2">
           <AgentAvatar s={s} size={SESSION_LIST_METRICS.avatar} /><span className={SESSION_LIST_STYLE.personalTitle}>{s.title || t("lib-format.untitled_session")}</span>
           {s.unreadCount > 0 && <span className={SESSION_LIST_STYLE.personalBadge}>{s.unreadCount}</span>}
         </a>
-        <button type="button" aria-label={t(prefs.pins.includes(s.id) ? "agents-agentsview.unpin" : "agents-agentsview.pin")} onClick={() => updateAgentPrefs((x) => togglePin(x, s.id))} className={SESSION_LIST_STYLE.pinButton}><Icon name="pin" size={SESSION_LIST_METRICS.icon} /></button>
+        <button type="button" aria-label={t(prefs.pins.includes(s.id) ? "agents-agentsview.unpin" : "agents-agentsview.pin")} aria-pressed={prefs.pins.includes(s.id)} onClick={() => updateAgentPrefs((x) => togglePin(x, s.id))} className={prefs.pins.includes(s.id) ? SESSION_LIST_STYLE.pinnedButton : SESSION_LIST_STYLE.pinButton}><Icon name="pin" size={SESSION_LIST_METRICS.icon} /></button>
       </div>} />
       {loaded && !error && !sessions.length && hints.map((h) => <p key={h} className="mb-1 px-2 text-[13px] text-ink-3">{h}</p>)}
       <RemovedAgents />

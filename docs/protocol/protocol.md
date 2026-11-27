@@ -3680,7 +3680,7 @@ GET /api/v1/agents/sessions?summary=1&limit=50&source=demo
 
 `total` is the number of matching sessions in the **whole collection**, not the page length or number of changes. Empty arrays are `[]`, not null. `next_cursor` is absent on the final page.
 
-- Order: newest `updated_at` first for runtime rows, newest `rankTimeMs` first for personal-agent rows, then composite identity ascending for ties. This is a latest-update timeline, not the clients' state-rank/pin sort.
+- Order: newest `updated_at` first for runtime rows, newest `rankTimeMs` first for personal-agent rows, then composite identity ascending for ties. This is a latest-update timeline, not the clients' state-rank sort. Personal-agent pages put the sessions in `GET /api/v1/agents/prefs` `pins` first, in pin order, ahead of every other row (so a pinned old session is on the first page); a `PUT /api/v1/agents/prefs` that changes the pins reorders the pages before it answers and sends an `agents` event.
 - A cursor traverses a **frozen filtered snapshot**: updates, deletions and inserts while scrolling cannot duplicate, omit or reorder rows in that snapshot. Every page returns its snapshot's same `revision` and `total`.
 - Snapshot retention is five minutes, with at most 32 active views per collection. A restart, expiry or eviction returns HTTP **409**, `code: "cursor_expired"`; restart at page one. Cursors bind filters and summary mode; a mismatched/tampered cursor returns 400.
 - The runtime collection includes Codex history. It uses the manager's already-decorated state, ownership, hidden/deleted-session rules and task metadata; it does not recompute business state in the hub.
