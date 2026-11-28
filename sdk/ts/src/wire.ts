@@ -662,12 +662,21 @@ export type DiskOffloadKind = "file" | "dir" | "app" | (string & {});
 export const DISK_OFFLOAD_KINDS = ["file", "dir", "app"] as const;
 
 /**
+ * Identifies one terminal_sessions provider within its extension.
+ */
+export type TerminalSessionContributionID = string & { readonly __brand: "TerminalSessionContributionID" };
+/** A TerminalSessionContributionID from its raw string. */
+export function terminalSessionContributionID(raw: string): TerminalSessionContributionID {
+  return raw as TerminalSessionContributionID;
+}
+
+/**
  * An interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize, terminal.close;
  * terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer machines/herdr panes;
  * only full devices may open or type after explicit owner confirmation.
  */
 export interface TerminalSessionItem {
-  id: string;
+  id: TerminalSessionContributionID;
   /** Display label for the terminal provider. */
   title?: string;
   description?: string;
@@ -7034,12 +7043,20 @@ export interface MachinesStatusResult {
 }
 
 /**
+ * A computer's hub machine id.
+ */
+export type HubMachineID = string & { readonly __brand: "HubMachineID" };
+/** A HubMachineID from its raw string. */
+export function hubMachineID(raw: string): HubMachineID {
+  return raw as HubMachineID;
+}
+
+/**
  * machines.exec (machines.exec): run one command on a confirmed, online computer after the owner approves it on a
  * confirmation card. Provide exactly one of argv (direct exec without shell) or command (run via /bin/sh -c).
  */
 export interface MachinesExecParams {
-  /** The computer's hub machine id. */
-  machine_id: string;
+  machine_id: HubMachineID;
   /**
    * Direct executable and arguments without a shell (mutually exclusive with command; at most 64 items, total <= 4096
    * bytes, no NUL bytes).
@@ -7058,7 +7075,7 @@ export interface MachinesExecParams {
 }
 
 export interface MachinesExecResult {
-  machine_id: string;
+  machine_id: HubMachineID;
   exit_code: number;
   /** Combined stdout and stderr, safely truncated to max_output_bytes when needed. */
   output: string;
@@ -8209,11 +8226,19 @@ export interface RoutineFactsResult {
 }
 
 /**
+ * Manager-assigned opaque interactive PTY session id.
+ */
+export type TerminalSessionID = string & { readonly __brand: "TerminalSessionID" };
+/** A TerminalSessionID from its raw string. */
+export function terminalSessionID(raw: string): TerminalSessionID {
+  return raw as TerminalSessionID;
+}
+
+/**
  * terminal.open: open an interactive PTY session for target at cols x rows.
  */
 export interface TerminalOpenParams {
-  /** Manager-assigned opaque PTY session id. */
-  session_id: string;
+  session_id: TerminalSessionID;
   /** Extension-defined terminal target identifier. */
   target: string;
   /** Initial terminal width in columns. */
@@ -8226,7 +8251,7 @@ export interface TerminalOpenParams {
  * terminal.open's answer: confirms the opened PTY session and optional display title.
  */
 export interface TerminalOpenResult {
-  session_id: string;
+  session_id: TerminalSessionID;
   title?: string;
 }
 
@@ -8234,7 +8259,7 @@ export interface TerminalOpenResult {
  * terminal.input: raw terminal input bytes (base64-encoded, at most 64 KiB decoded) typed by the user.
  */
 export interface TerminalInputParams {
-  session_id: string;
+  session_id: TerminalSessionID;
   /** Base64-encoded raw bytes to write to the PTY master. */
   data_b64: string;
 }
@@ -8243,7 +8268,7 @@ export interface TerminalInputParams {
  * terminal.resize: update the PTY window size.
  */
 export interface TerminalResizeParams {
-  session_id: string;
+  session_id: TerminalSessionID;
   cols: number;
   rows: number;
 }
@@ -8252,7 +8277,7 @@ export interface TerminalResizeParams {
  * terminal.close: close the PTY session (user closed, last subscriber disconnected, or idle timeout).
  */
 export interface TerminalCloseParams {
-  session_id: string;
+  session_id: TerminalSessionID;
   reason?: string;
 }
 
@@ -8260,7 +8285,7 @@ export interface TerminalCloseParams {
  * terminal.frame (program -> hub): one ordered chunk of PTY output bytes (base64-encoded, at most 64 KiB decoded).
  */
 export interface TerminalFrameEvent {
-  session_id: string;
+  session_id: TerminalSessionID;
   seq: number;
   data_b64: string;
 }
@@ -8269,7 +8294,7 @@ export interface TerminalFrameEvent {
  * terminal.closed (program -> hub): the PTY session exited or closed.
  */
 export interface TerminalClosedEvent {
-  session_id: string;
+  session_id: TerminalSessionID;
   exit_code?: number;
   reason?: string;
 }

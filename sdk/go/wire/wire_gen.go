@@ -663,11 +663,17 @@ const (
 // DiskOffloadKinds are the values of DiskOffloadKind, in order.
 var DiskOffloadKinds = []string{"file", "dir", "app"}
 
+// TerminalSessionContributionID: identifies one terminal_sessions provider within its extension.
+type TerminalSessionContributionID string
+
+// String returns the ID as it is on the wire.
+func (v TerminalSessionContributionID) String() string { return string(v) }
+
 // TerminalSessionItem: an interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize,
 // terminal.close; terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer
 // machines/herdr panes; only full devices may open or type after explicit owner confirmation.
 type TerminalSessionItem struct {
-	ID string `json:"id"`
+	ID TerminalSessionContributionID `json:"id"`
 	// Display label for the terminal provider.
 	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -6526,12 +6532,17 @@ type MachinesStatusResult struct {
 	Error string `json:"error,omitempty"`
 }
 
+// HubMachineID: A computer's hub machine id.
+type HubMachineID string
+
+// String returns the ID as it is on the wire.
+func (v HubMachineID) String() string { return string(v) }
+
 // MachinesExecParams: machines.exec (machines.exec): run one command on a confirmed, online computer after the owner
 // approves it on a confirmation card. Provide exactly one of argv (direct exec without shell) or command (run via
 // /bin/sh -c).
 type MachinesExecParams struct {
-	// The computer's hub machine id.
-	MachineID string `json:"machine_id"`
+	MachineID HubMachineID `json:"machine_id"`
 	// Direct executable and arguments without a shell (mutually exclusive with command; at most 64 items, total <= 4096
 	// bytes, no NUL bytes).
 	Argv []string `json:"argv,omitempty"`
@@ -6548,8 +6559,8 @@ type MachinesExecParams struct {
 }
 
 type MachinesExecResult struct {
-	MachineID string `json:"machine_id"`
-	ExitCode  int    `json:"exit_code"`
+	MachineID HubMachineID `json:"machine_id"`
+	ExitCode  int          `json:"exit_code"`
 	// Combined stdout and stderr, safely truncated to max_output_bytes when needed.
 	Output string `json:"output"`
 	// Whether output exceeded max_output_bytes and was truncated.
@@ -7733,10 +7744,15 @@ type RoutineFactsResult struct {
 	Sections []RoutineReportSection `json:"sections,omitempty"`
 }
 
+// TerminalSessionID: manager-assigned opaque interactive PTY session id.
+type TerminalSessionID string
+
+// String returns the ID as it is on the wire.
+func (v TerminalSessionID) String() string { return string(v) }
+
 // TerminalOpenParams: terminal.open: open an interactive PTY session for target at cols x rows.
 type TerminalOpenParams struct {
-	// Manager-assigned opaque PTY session id.
-	SessionID string `json:"session_id"`
+	SessionID TerminalSessionID `json:"session_id"`
 	// Extension-defined terminal target identifier.
 	Target string `json:"target"`
 	// Initial terminal width in columns.
@@ -7747,45 +7763,45 @@ type TerminalOpenParams struct {
 
 // TerminalOpenResult: terminal.open's answer: confirms the opened PTY session and optional display title.
 type TerminalOpenResult struct {
-	SessionID string `json:"session_id"`
-	Title     string `json:"title,omitempty"`
+	SessionID TerminalSessionID `json:"session_id"`
+	Title     string            `json:"title,omitempty"`
 }
 
 // TerminalInputParams: terminal.input: raw terminal input bytes (base64-encoded, at most 64 KiB decoded) typed by the
 // user.
 type TerminalInputParams struct {
-	SessionID string `json:"session_id"`
+	SessionID TerminalSessionID `json:"session_id"`
 	// Base64-encoded raw bytes to write to the PTY master.
 	DataB64 string `json:"data_b64"`
 }
 
 // TerminalResizeParams: terminal.resize: update the PTY window size.
 type TerminalResizeParams struct {
-	SessionID string `json:"session_id"`
-	Cols      int    `json:"cols"`
-	Rows      int    `json:"rows"`
+	SessionID TerminalSessionID `json:"session_id"`
+	Cols      int               `json:"cols"`
+	Rows      int               `json:"rows"`
 }
 
 // TerminalCloseParams: terminal.close: close the PTY session (user closed, last subscriber disconnected, or idle
 // timeout).
 type TerminalCloseParams struct {
-	SessionID string `json:"session_id"`
-	Reason    string `json:"reason,omitempty"`
+	SessionID TerminalSessionID `json:"session_id"`
+	Reason    string            `json:"reason,omitempty"`
 }
 
 // TerminalFrameEvent: terminal.frame (program -> hub): one ordered chunk of PTY output bytes (base64-encoded, at most
 // 64 KiB decoded).
 type TerminalFrameEvent struct {
-	SessionID string `json:"session_id"`
-	Seq       int    `json:"seq"`
-	DataB64   string `json:"data_b64"`
+	SessionID TerminalSessionID `json:"session_id"`
+	Seq       int               `json:"seq"`
+	DataB64   string            `json:"data_b64"`
 }
 
 // TerminalClosedEvent: terminal.closed (program -> hub): the PTY session exited or closed.
 type TerminalClosedEvent struct {
-	SessionID string `json:"session_id"`
-	ExitCode  *int   `json:"exit_code,omitempty"`
-	Reason    string `json:"reason,omitempty"`
+	SessionID TerminalSessionID `json:"session_id"`
+	ExitCode  *int              `json:"exit_code,omitempty"`
+	Reason    string            `json:"reason,omitempty"`
 }
 
 // requiredJSONComponent preserves required fields only inside stream payloads.

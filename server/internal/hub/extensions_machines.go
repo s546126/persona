@@ -169,13 +169,14 @@ func (h *Hub) hubMachinesExec(ctx context.Context, from, extID string, raw json.
 	if caller == "" {
 		caller = devicesOwner
 	}
-	if h.knownEntry(p.MachineID) != nil && h.entryOwner(p.MachineID) != caller {
+	machineID := string(p.MachineID)
+	if h.knownEntry(machineID) != nil && h.entryOwner(machineID) != caller {
 		return wire.MachinesExecResult{}, &rpc.Error{Code: codeOtherManager, Message: errOtherManager.Error()}
 	}
-	if h.machinePending(p.MachineID) {
+	if h.machinePending(machineID) {
 		return wire.MachinesExecResult{}, &rpc.Error{Code: "machine_pending", Message: "computer is pending owner confirmation"}
 	}
-	m := h.localMachine(p.MachineID)
+	m := h.localMachine(machineID)
 	if m == nil {
 		return wire.MachinesExecResult{}, &rpc.Error{Code: "not_found", Message: "unknown machine"}
 	}
@@ -191,7 +192,7 @@ func (h *Hub) hubMachinesExec(ctx context.Context, from, extID string, raw json.
 	if !m.hasCapability(nodeproto.MachinesExec) {
 		return wire.MachinesExecResult{}, &rpc.Error{Code: proto.CodeNodeOutdated, Message: "node does not support machines.exec; upgrade the node"}
 	}
-	p.MachineID = m.cfg.ID
+	p.MachineID = wire.HubMachineID(m.cfg.ID)
 	timeoutMs := p.TimeoutMs
 	if timeoutMs <= 0 {
 		timeoutMs = 20000
@@ -208,7 +209,7 @@ func (h *Hub) hubMachinesExec(ctx context.Context, from, extID string, raw json.
 		return wire.MachinesExecResult{}, err
 	}
 	if res.MachineID == "" {
-		res.MachineID = m.cfg.ID
+		res.MachineID = wire.HubMachineID(m.cfg.ID)
 	}
 	return res, nil
 }

@@ -2,7 +2,6 @@ package extmgr
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"testing"
 	"time"
@@ -17,7 +16,7 @@ type stubTermProc struct {
 }
 
 func (s *stubTermProc) Call(_ context.Context, method string, params, _ any) error {
-	if method == "terminal.close" {
+	if method == wire.MethodTerminalClose {
 		if p, ok := params.(wire.TerminalCloseParams); ok {
 			s.mu.Lock()
 			s.closed = append(s.closed, p)
@@ -91,13 +90,13 @@ func TestExtTerminalIdleTimeoutReapsSession(t *testing.T) {
 
 	stubHost.mu.Lock()
 	gotEmit := len(stubHost.emitted)
-	var env map[string]any
+	var ev extwire.ExtTerminalEvent
 	if gotEmit > 0 {
-		_ = json.Unmarshal(stubHost.emitted[0].Envelope, &env)
+		ev = stubHost.emitted[0].Event
 	}
 	stubHost.mu.Unlock()
-	if gotEmit != 1 || env["type"] != "ext_terminal_closed" || env["reason"] != "idle_timeout" {
-		t.Fatalf("unexpected idle close notification: count=%d env=%v", gotEmit, env)
+	if gotEmit != 1 || ev.Type != extwire.ExtTerminalEventClosed || ev.Reason != "idle_timeout" {
+		t.Fatalf("unexpected idle close notification: count=%d ev=%+v", gotEmit, ev)
 	}
 
 	deadline := time.Now().Add(2 * time.Second)

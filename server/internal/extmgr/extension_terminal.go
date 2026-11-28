@@ -58,20 +58,6 @@ type extTerminalProc interface {
 	Call(ctx context.Context, method string, params, out any) error
 }
 
-type extTerminalClientMsg struct {
-	Type      string `json:"type"`
-	Manager   string `json:"manager,omitempty"`
-	Extension string `json:"extension,omitempty"`
-	Target    string `json:"target,omitempty"`
-	SessionID string `json:"session_id,omitempty"`
-	Cols      int    `json:"cols,omitempty"`
-	Rows      int    `json:"rows,omitempty"`
-	DataB64   string `json:"data_b64,omitempty"`
-	AfterSeq  int    `json:"after_seq,omitempty"`
-	Confirmed bool   `json:"confirmed,omitempty"`
-	Reason    string `json:"reason,omitempty"`
-}
-
 func (m *extTerminalManager) clock() time.Time {
 	if m.now != nil {
 		return m.now()
@@ -107,58 +93,43 @@ func validTerminalSize(cols, rows int) bool {
 	return cols >= 1 && cols <= 1000 && rows >= 1 && rows <= 1000
 }
 
-func (h *Manager) extTerminalEmit(who extwire.UIPrincipal, payload any) {
+func (h *Manager) extTerminalEmit(who extwire.UIPrincipal, ev extwire.ExtTerminalEvent) {
 	if h.opts.Hub == nil || who.Connection == "" {
 		return
 	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	_ = h.opts.Hub.Notify(extwire.EventExtTerminal, extwire.ExtTerminalTarget{Who: who, Envelope: raw})
+	_ = h.opts.Hub.Notify(extwire.EventExtTerminal, extwire.ExtTerminalTarget{Who: who, Event: ev})
 }
 
-func (h *Manager) extTerminalError(who extwire.UIPrincipal, sessionID, extID, target, code, msg string) {
-	out := map[string]any{
-		"type":  "ext_terminal_error",
-		"code":  code,
-		"error": msg,
-	}
-	if sessionID != "" {
-		out["session_id"] = sessionID
-	}
-	if extID != "" {
-		out["extension"] = extID
-	}
-	if target != "" {
-		out["target"] = target
-	}
-	h.extTerminalEmit(who, out)
+func (h *Manager) extTerminalError(who extwire.UIPrincipal, sessionID wire.TerminalSessionID, extID, target, code, msg string) {
+	h.extTerminalEmit(who, extwire.ExtTerminalEvent{
+		Type:      extwire.ExtTerminalEventError,
+		SessionID: sessionID,
+		Extension: extID,
+		Target:    target,
+		Code:      code,
+		Error:     extwire.ExtTerminalErrorText(msg),
+	})
 }
 
 func (h *Manager) requestExtTerminal(ctx context.Context, call extwire.ExtTerminalCall) (buswire.None, error) {
 	if !h.ready(ctx) {
 		return buswire.None{}, errAssistantOffline
 	}
-	var msg extTerminalClientMsg
-	if err := json.Unmarshal(call.Envelope, &msg); err != nil {
-		h.extTerminalError(call.Who, "", "", "", "invalid_message", "invalid terminal message")
-		return buswire.None{}, nil
-	}
+	msg := call.Envelope
 	if call.Who.Role != roleFull || call.Who.Connection == "" {
 		h.extTerminalError(call.Who, msg.SessionID, msg.Extension, msg.Target, "forbidden", "interactive extension terminal requires a full device")
 		return buswire.None{}, nil
 	}
 	switch msg.Type {
-	case "ext_terminal_open":
+	case extwire.ExtTerminalActionOpen:
 		h.extTerminalOpen(ctx, call.Who, msg)
-	case "ext_terminal_subscribe":
+	case extwire.ExtTerminalActionSubscribe:
 		h.extTerminalSubscribe(call.Who, msg)
-	case "ext_terminal_input":
+	case extwire.ExtTerminalActionInput:
 		h.extTerminalInput(ctx, call.Who, msg)
-	case "ext_terminal_resize":
+	case extwire.ExtTerminalActionResize:
 		h.extTerminalResize(ctx, call.Who, msg)
-	case "ext_terminal_close":
+	case extwire.ExtTerminalActionClose:
 		h.extTerminalClose(call.Who, msg)
 	default:
 		h.extTerminalError(call.Who, msg.SessionID, msg.Extension, msg.Target, "unknown_type", "unknown extension terminal command")
@@ -191,7 +162,7 @@ func (h *Manager) resolveTerminalExtension(extID string) (string, *extension.Ext
 	return canon, p, hp.proc, "", ""
 }
 
-func (h *Manager) extTerminalOpen(ctx context.Context, who extwire.UIPrincipal, msg extTerminalClientMsg) {
+func (h *Manager) extTerminalOpen(ctx context.Context, who extwire.UIPrincipal, msg extwire.ExtTerminalClientEnvelope) {
 	if !msg.Confirmed {
 		h.extTerminalError(who, "", msg.Extension, msg.Target, "confirmation_required", "explicit owner confirmation is required to open an extension terminal")
 		return
@@ -234,6 +205,7 @@ func (h *Manager) extTerminalOpen(ctx context.Context, who extwire.UIPrincipal, 
 		return
 	}
 	sessionID := "extterm_" + randomHex(12)
+	typedSessionID := wire.TerminalSessionID(sessionID)
 	sess := &extTerminalSession{
 		id:         sessionID,
 		extension:  extID,
@@ -252,8 +224,8 @@ func (h *Manager) extTerminalOpen(ctx context.Context, who extwire.UIPrincipal, 
 	callCtx, cancel := context.WithTimeout(ctx, extTerminalCallTimeout)
 	defer cancel()
 	var res wire.TerminalOpenResult
-	err := proc.Call(callCtx, "terminal.open", wire.TerminalOpenParams{
-		SessionID: sessionID,
+	err := proc.Call(callCtx, wire.MethodTerminalOpen, wire.TerminalOpenParams{
+		SessionID: typedSessionID,
 		Target:    msg.Target,
 		Cols:      cols,
 		Rows:      rows,
@@ -264,7 +236,7 @@ func (h *Manager) extTerminalOpen(ctx context.Context, who extwire.UIPrincipal, 
 		sess.closed = true
 		tm.mu.Unlock()
 		code, message := extTerminalRPCError(err)
-		h.extTerminalError(who, sessionID, extID, msg.Target, code, message)
+		h.extTerminalError(who, typedSessionID, extID, msg.Target, code, message)
 		return
 	}
 
@@ -276,25 +248,26 @@ func (h *Manager) extTerminalOpen(ctx context.Context, who extwire.UIPrincipal, 
 	title, finalCols, finalRows := sess.title, sess.cols, sess.rows
 	tm.mu.Unlock()
 
-	h.extTerminalEmit(who, map[string]any{
-		"type":       "ext_terminal_opened",
-		"session_id": sessionID,
-		"extension":  extID,
-		"target":     msg.Target,
-		"title":      title,
-		"cols":       finalCols,
-		"rows":       finalRows,
+	h.extTerminalEmit(who, extwire.ExtTerminalEvent{
+		Type:      extwire.ExtTerminalEventOpened,
+		SessionID: typedSessionID,
+		Extension: extID,
+		Target:    msg.Target,
+		Title:     title,
+		Cols:      finalCols,
+		Rows:      finalRows,
 	})
 }
 
-func (h *Manager) extTerminalSubscribe(who extwire.UIPrincipal, msg extTerminalClientMsg) {
-	if msg.SessionID == "" {
+func (h *Manager) extTerminalSubscribe(who extwire.UIPrincipal, msg extwire.ExtTerminalClientEnvelope) {
+	sessID := string(msg.SessionID)
+	if sessID == "" {
 		h.extTerminalError(who, "", msg.Extension, msg.Target, "invalid_session", "session_id is required")
 		return
 	}
 	tm := &h.extTerms
 	tm.mu.Lock()
-	sess := tm.sessions[msg.SessionID]
+	sess := tm.sessions[sessID]
 	if sess == nil || sess.closed {
 		tm.mu.Unlock()
 		h.extTerminalError(who, msg.SessionID, msg.Extension, msg.Target, "not_found", "terminal session not found")
@@ -318,28 +291,29 @@ func (h *Manager) extTerminalSubscribe(who extwire.UIPrincipal, msg extTerminalC
 	}
 	tm.mu.Unlock()
 
-	h.extTerminalEmit(who, map[string]any{
-		"type":       "ext_terminal_opened",
-		"session_id": msg.SessionID,
-		"extension":  extID,
-		"target":     target,
-		"title":      title,
-		"cols":       cols,
-		"rows":       rows,
+	h.extTerminalEmit(who, extwire.ExtTerminalEvent{
+		Type:      extwire.ExtTerminalEventOpened,
+		SessionID: msg.SessionID,
+		Extension: extID,
+		Target:    target,
+		Title:     title,
+		Cols:      cols,
+		Rows:      rows,
 	})
 	for _, f := range replay {
-		h.extTerminalEmit(who, map[string]any{
-			"type":       "ext_terminal_frame",
-			"session_id": msg.SessionID,
-			"extension":  extID,
-			"seq":        f.seq,
-			"data_b64":   f.dataB64,
+		h.extTerminalEmit(who, extwire.ExtTerminalEvent{
+			Type:      extwire.ExtTerminalEventFrame,
+			SessionID: msg.SessionID,
+			Extension: extID,
+			Seq:       f.seq,
+			DataB64:   f.dataB64,
 		})
 	}
 }
 
-func (h *Manager) extTerminalInput(ctx context.Context, who extwire.UIPrincipal, msg extTerminalClientMsg) {
-	if msg.SessionID == "" || msg.DataB64 == "" {
+func (h *Manager) extTerminalInput(ctx context.Context, who extwire.UIPrincipal, msg extwire.ExtTerminalClientEnvelope) {
+	sessID := string(msg.SessionID)
+	if sessID == "" || msg.DataB64 == "" {
 		h.extTerminalError(who, msg.SessionID, msg.Extension, msg.Target, "invalid_params", "session_id and data_b64 are required")
 		return
 	}
@@ -354,7 +328,7 @@ func (h *Manager) extTerminalInput(ctx context.Context, who extwire.UIPrincipal,
 	}
 	tm := &h.extTerms
 	tm.mu.Lock()
-	sess := tm.sessions[msg.SessionID]
+	sess := tm.sessions[sessID]
 	if sess == nil || sess.closed {
 		tm.mu.Unlock()
 		h.extTerminalError(who, msg.SessionID, msg.Extension, msg.Target, "not_found", "terminal session not found")
@@ -371,7 +345,7 @@ func (h *Manager) extTerminalInput(ctx context.Context, who extwire.UIPrincipal,
 
 	callCtx, cancel := context.WithTimeout(ctx, extTerminalCallTimeout)
 	defer cancel()
-	if err := proc.Call(callCtx, "terminal.input", wire.TerminalInputParams{
+	if err := proc.Call(callCtx, wire.MethodTerminalInput, wire.TerminalInputParams{
 		SessionID: msg.SessionID,
 		DataB64:   msg.DataB64,
 	}, nil); err != nil {
@@ -380,14 +354,15 @@ func (h *Manager) extTerminalInput(ctx context.Context, who extwire.UIPrincipal,
 	}
 }
 
-func (h *Manager) extTerminalResize(ctx context.Context, who extwire.UIPrincipal, msg extTerminalClientMsg) {
-	if msg.SessionID == "" || !validTerminalSize(msg.Cols, msg.Rows) {
+func (h *Manager) extTerminalResize(ctx context.Context, who extwire.UIPrincipal, msg extwire.ExtTerminalClientEnvelope) {
+	sessID := string(msg.SessionID)
+	if sessID == "" || !validTerminalSize(msg.Cols, msg.Rows) {
 		h.extTerminalError(who, msg.SessionID, msg.Extension, msg.Target, "invalid_params", "valid session_id, cols, and rows are required")
 		return
 	}
 	tm := &h.extTerms
 	tm.mu.Lock()
-	sess := tm.sessions[msg.SessionID]
+	sess := tm.sessions[sessID]
 	if sess == nil || sess.closed {
 		tm.mu.Unlock()
 		h.extTerminalError(who, msg.SessionID, msg.Extension, msg.Target, "not_found", "terminal session not found")
@@ -405,7 +380,7 @@ func (h *Manager) extTerminalResize(ctx context.Context, who extwire.UIPrincipal
 
 	callCtx, cancel := context.WithTimeout(ctx, extTerminalCallTimeout)
 	defer cancel()
-	if err := proc.Call(callCtx, "terminal.resize", wire.TerminalResizeParams{
+	if err := proc.Call(callCtx, wire.MethodTerminalResize, wire.TerminalResizeParams{
 		SessionID: msg.SessionID,
 		Cols:      msg.Cols,
 		Rows:      msg.Rows,
@@ -415,8 +390,9 @@ func (h *Manager) extTerminalResize(ctx context.Context, who extwire.UIPrincipal
 	}
 }
 
-func (h *Manager) extTerminalClose(who extwire.UIPrincipal, msg extTerminalClientMsg) {
-	if msg.SessionID == "" {
+func (h *Manager) extTerminalClose(who extwire.UIPrincipal, msg extwire.ExtTerminalClientEnvelope) {
+	sessID := string(msg.SessionID)
+	if sessID == "" {
 		return
 	}
 	reason := strings.TrimSpace(msg.Reason)
@@ -425,7 +401,7 @@ func (h *Manager) extTerminalClose(who extwire.UIPrincipal, msg extTerminalClien
 	}
 	tm := &h.extTerms
 	tm.mu.Lock()
-	sess := tm.sessions[msg.SessionID]
+	sess := tm.sessions[sessID]
 	if sess == nil || sess.closed {
 		tm.mu.Unlock()
 		return
@@ -435,7 +411,7 @@ func (h *Manager) extTerminalClose(who extwire.UIPrincipal, msg extTerminalClien
 		h.extTerminalError(who, msg.SessionID, sess.extension, sess.target, "forbidden", "connection is not subscribed to this terminal session")
 		return
 	}
-	delete(tm.sessions, msg.SessionID)
+	delete(tm.sessions, sessID)
 	sess.closed = true
 	subs := make([]extwire.UIPrincipal, 0, len(sess.subs))
 	for _, sub := range sess.subs {
@@ -447,18 +423,19 @@ func (h *Manager) extTerminalClose(who extwire.UIPrincipal, msg extTerminalClien
 	go func() {
 		callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = proc.Call(callCtx, "terminal.close", wire.TerminalCloseParams{
+		_ = proc.Call(callCtx, wire.MethodTerminalClose, wire.TerminalCloseParams{
 			SessionID: msg.SessionID,
 			Reason:    reason,
 		}, nil)
 	}()
+	ev := extwire.ExtTerminalEvent{
+		Type:      extwire.ExtTerminalEventClosed,
+		SessionID: msg.SessionID,
+		Extension: extID,
+		Reason:    reason,
+	}
 	for _, sub := range subs {
-		h.extTerminalEmit(sub, map[string]any{
-			"type":       "ext_terminal_closed",
-			"session_id": msg.SessionID,
-			"extension":  extID,
-			"reason":     reason,
-		})
+		h.extTerminalEmit(sub, ev)
 	}
 }
 
@@ -475,9 +452,10 @@ func (h *Manager) extTerminalFrame(extID string, params json.RawMessage) {
 		return
 	}
 
+	sessID := string(ev.SessionID)
 	tm := &h.extTerms
 	tm.mu.Lock()
-	sess := tm.sessions[ev.SessionID]
+	sess := tm.sessions[sessID]
 	if sess == nil || sess.closed || sess.extension != extID {
 		tm.mu.Unlock()
 		return
@@ -495,12 +473,12 @@ func (h *Manager) extTerminalFrame(extID string, params json.RawMessage) {
 	}
 	tm.mu.Unlock()
 
-	frame := map[string]any{
-		"type":       "ext_terminal_frame",
-		"session_id": ev.SessionID,
-		"extension":  extID,
-		"seq":        ev.Seq,
-		"data_b64":   ev.DataB64,
+	frame := extwire.ExtTerminalEvent{
+		Type:      extwire.ExtTerminalEventFrame,
+		SessionID: ev.SessionID,
+		Extension: extID,
+		Seq:       ev.Seq,
+		DataB64:   ev.DataB64,
 	}
 	for _, sub := range subs {
 		h.extTerminalEmit(sub, frame)
@@ -513,14 +491,15 @@ func (h *Manager) extTerminalClosed(extID string, params json.RawMessage) {
 	if err := json.Unmarshal(params, &ev); err != nil || ev.SessionID == "" {
 		return
 	}
+	sessID := string(ev.SessionID)
 	tm := &h.extTerms
 	tm.mu.Lock()
-	sess := tm.sessions[ev.SessionID]
+	sess := tm.sessions[sessID]
 	if sess == nil || sess.closed || sess.extension != extID {
 		tm.mu.Unlock()
 		return
 	}
-	delete(tm.sessions, ev.SessionID)
+	delete(tm.sessions, sessID)
 	sess.closed = true
 	subs := make([]extwire.UIPrincipal, 0, len(sess.subs))
 	for _, sub := range sess.subs {
@@ -528,17 +507,15 @@ func (h *Manager) extTerminalClosed(extID string, params json.RawMessage) {
 	}
 	tm.mu.Unlock()
 
-	payload := map[string]any{
-		"type":       "ext_terminal_closed",
-		"session_id": ev.SessionID,
-		"extension":  extID,
-		"reason":     ev.Reason,
-	}
-	if ev.ExitCode != nil {
-		payload["exit_code"] = *ev.ExitCode
+	closedEv := extwire.ExtTerminalEvent{
+		Type:      extwire.ExtTerminalEventClosed,
+		SessionID: ev.SessionID,
+		Extension: extID,
+		ExitCode:  ev.ExitCode,
+		Reason:    ev.Reason,
 	}
 	for _, sub := range subs {
-		h.extTerminalEmit(sub, payload)
+		h.extTerminalEmit(sub, closedEv)
 	}
 }
 
@@ -564,8 +541,8 @@ func (h *Manager) extTerminalDisconnect(who extwire.UIPrincipal) {
 
 	for _, sess := range orphaned {
 		callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = sess.proc.Call(callCtx, "terminal.close", wire.TerminalCloseParams{
-			SessionID: sess.id,
+		_ = sess.proc.Call(callCtx, wire.MethodTerminalClose, wire.TerminalCloseParams{
+			SessionID: wire.TerminalSessionID(sess.id),
 			Reason:    "disconnected",
 		}, nil)
 		cancel()
@@ -587,19 +564,20 @@ func (h *Manager) extTerminalDropExtension(extID string) {
 	tm.mu.Unlock()
 
 	for _, sess := range gone {
+		ev := extwire.ExtTerminalEvent{
+			Type:      extwire.ExtTerminalEventClosed,
+			SessionID: wire.TerminalSessionID(sess.id),
+			Extension: sess.extension,
+			Reason:    "extension_stopped",
+		}
 		for _, sub := range sess.subs {
-			h.extTerminalEmit(sub, map[string]any{
-				"type":       "ext_terminal_closed",
-				"session_id": sess.id,
-				"extension":  sess.extension,
-				"reason":     "extension_stopped",
-			})
+			h.extTerminalEmit(sub, ev)
 		}
 		go func(s *extTerminalSession) {
 			callCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			_ = s.proc.Call(callCtx, "terminal.close", wire.TerminalCloseParams{
-				SessionID: s.id,
+			_ = s.proc.Call(callCtx, wire.MethodTerminalClose, wire.TerminalCloseParams{
+				SessionID: wire.TerminalSessionID(s.id),
 				Reason:    "extension_stopped",
 			}, nil)
 		}(sess)
@@ -622,19 +600,20 @@ func (h *Manager) extTerminalSweep(now time.Time) {
 	tm.mu.Unlock()
 
 	for _, sess := range expired {
+		ev := extwire.ExtTerminalEvent{
+			Type:      extwire.ExtTerminalEventClosed,
+			SessionID: wire.TerminalSessionID(sess.id),
+			Extension: sess.extension,
+			Reason:    "idle_timeout",
+		}
 		for _, sub := range sess.subs {
-			h.extTerminalEmit(sub, map[string]any{
-				"type":       "ext_terminal_closed",
-				"session_id": sess.id,
-				"extension":  sess.extension,
-				"reason":     "idle_timeout",
-			})
+			h.extTerminalEmit(sub, ev)
 		}
 		go func(s *extTerminalSession) {
 			callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_ = s.proc.Call(callCtx, "terminal.close", wire.TerminalCloseParams{
-				SessionID: s.id,
+			_ = s.proc.Call(callCtx, wire.MethodTerminalClose, wire.TerminalCloseParams{
+				SessionID: wire.TerminalSessionID(s.id),
 				Reason:    "idle_timeout",
 			}, nil)
 		}(sess)

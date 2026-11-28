@@ -935,19 +935,20 @@ var Points = map[string]Point{
 		if err := strict(raw, &item); err != nil {
 			return "", err
 		}
-		if !idPattern.MatchString(item.ID) {
-			return item.ID, fmt.Errorf("terminal_sessions id %q: a-z0-9_-", item.ID)
+		id := string(item.ID)
+		if !idPattern.MatchString(id) {
+			return id, fmt.Errorf("terminal_sessions id %q: a-z0-9_-", id)
 		}
 		if item.Title != "" && utf8.RuneCountInString(strings.TrimSpace(item.Title)) > 80 {
-			return item.ID, fmt.Errorf("terminal_sessions %s: title longer than 80 characters", item.ID)
+			return id, fmt.Errorf("terminal_sessions %s: title longer than 80 characters", id)
 		}
 		if item.Description != "" && utf8.RuneCountInString(item.Description) > 200 {
-			return item.ID, fmt.Errorf("terminal_sessions %s: description longer than 200 characters", item.ID)
+			return id, fmt.Errorf("terminal_sessions %s: description longer than 200 characters", id)
 		}
 		if item.MaxSessions < 0 || item.MaxSessions > 4 {
-			return item.ID, fmt.Errorf("terminal_sessions %s: max_sessions must be between 1 and 4", item.ID)
+			return id, fmt.Errorf("terminal_sessions %s: max_sessions must be between 1 and 4", id)
 		}
-		return item.ID, nil
+		return id, nil
 	}},
 }
 

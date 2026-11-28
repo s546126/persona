@@ -982,13 +982,22 @@ object ExtensionDiskOffloadKind {
 }
 
 /**
+ * Identifies one terminal_sessions provider within its extension. It encodes as the bare string.
+ */
+@Serializable
+@JvmInline
+value class ExtensionTerminalSessionContributionID(val raw: String) {
+    override fun toString(): String = raw
+}
+
+/**
  * An interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize, terminal.close;
  * terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer machines/herdr panes;
  * only full devices may open or type after explicit owner confirmation.
  */
 @Serializable
 data class ExtensionTerminalSessionItem(
-    val id: String = "",
+    val id: ExtensionTerminalSessionContributionID = ExtensionTerminalSessionContributionID(""),
     /**
      * Display label for the terminal provider.
      */

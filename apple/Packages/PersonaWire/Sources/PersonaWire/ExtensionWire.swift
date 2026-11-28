@@ -1707,18 +1707,43 @@ public nonisolated enum ExtensionDiskOffloadKind {
     public static let all = ["file", "dir", "app"]
 }
 
+/// Identifies one terminal_sessions provider within its extension.
+/// It encodes as the bare string.
+public nonisolated struct ExtensionTerminalSessionContributionID: RawRepresentable, Codable, Hashable, Sendable, CustomStringConvertible {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public var description: String { rawValue }
+
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
+}
+
 /// An interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize, terminal.close;
 /// terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer machines/herdr
 /// panes; only full devices may open or type after explicit owner confirmation.
 public nonisolated struct ExtensionTerminalSessionItem: Codable, Hashable, Sendable {
-    public var id: String
+    public var id: ExtensionTerminalSessionContributionID
     /// Display label for the terminal provider.
     public var title: String?
     public var description: String?
     /// Optional concurrent session cap (default and hard limit 4 per extension).
     public var maxSessions: Int?
 
-    public init(id: String = "", title: String? = nil, description: String? = nil, maxSessions: Int? = nil) {
+    public init(id: ExtensionTerminalSessionContributionID = ExtensionTerminalSessionContributionID(""), title: String? = nil, description: String? = nil, maxSessions: Int? = nil) {
         self.id = id
         self.title = title
         self.description = description
@@ -1734,7 +1759,7 @@ public nonisolated struct ExtensionTerminalSessionItem: Codable, Hashable, Senda
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.id = (try? c.decodeIfPresent(ExtensionTerminalSessionContributionID.self, forKey: .id)) ?? ExtensionTerminalSessionContributionID("")
         self.title = try? c.decodeIfPresent(String.self, forKey: .title)
         self.description = try? c.decodeIfPresent(String.self, forKey: .description)
         self.maxSessions = try? c.decodeIfPresent(Int.self, forKey: .maxSessions)

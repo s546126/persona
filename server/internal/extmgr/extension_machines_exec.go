@@ -28,7 +28,7 @@ const (
 )
 
 func validateMachinesExecParams(p *wire.MachinesExecParams) error {
-	p.MachineID = strings.TrimSpace(p.MachineID)
+	p.MachineID = wire.HubMachineID(strings.TrimSpace(string(p.MachineID)))
 	if p.MachineID == "" {
 		return &rpc.Error{Code: "invalid_params", Message: "machine_id is required"}
 	}
@@ -112,8 +112,9 @@ func (ps *extensions) extensionMachinesExecCall(ctx context.Context, id string, 
 	if ext := ps.reg.Get(id); ext != nil && ext.Full != nil && strings.TrimSpace(ext.Full.Name) != "" {
 		extName = ext.Full.Name
 	}
-	machineName := p.MachineID
-	if m := ps.h.localMachine(p.MachineID); m != nil && strings.TrimSpace(m.name()) != "" {
+	machineID := string(p.MachineID)
+	machineName := machineID
+	if m := ps.h.localMachine(machineID); m != nil && strings.TrimSpace(m.name()) != "" {
 		machineName = m.name()
 	}
 
@@ -122,7 +123,7 @@ func (ps *extensions) extensionMachinesExecCall(ctx context.Context, id string, 
 		cmdDisplay = strings.Join(p.Argv, " ")
 	}
 	var summaryParts []string
-	summaryParts = append(summaryParts, fmt.Sprintf("Extension %s (%s) wants to run on %s (%s): %s", extName, id, machineName, p.MachineID, cmdDisplay))
+	summaryParts = append(summaryParts, fmt.Sprintf("Extension %s (%s) wants to run on %s (%s): %s", extName, id, machineName, machineID, cmdDisplay))
 	if p.Cwd != "" {
 		summaryParts = append(summaryParts, "cwd: "+p.Cwd)
 	}
@@ -134,7 +135,7 @@ func (ps *extensions) extensionMachinesExecCall(ctx context.Context, id string, 
 	cardInputMap := map[string]any{
 		"extension_id":   id,
 		"extension_name": extName,
-		"machine_id":     p.MachineID,
+		"machine_id":     machineID,
 		"machine_name":   machineName,
 	}
 	if len(p.Argv) > 0 {
@@ -153,11 +154,11 @@ func (ps *extensions) extensionMachinesExecCall(ctx context.Context, id string, 
 	}
 	cardInput, _ := json.Marshal(cardInputMap)
 
-	res, cardID := ps.h.approveCard(ctx, asker{machine: p.MachineID}, "machines.exec", summary, cardInput)
+	res, cardID := ps.h.approveCard(ctx, asker{machine: machineID}, "machines.exec", summary, cardInput)
 	outcome := res.Outcome()
 	if res.Allow == nil || !*res.Allow {
 		ps.h.audit(ctx, id, "machines_exec_denied", "extension:"+id, map[string]any{
-			"machine_id": p.MachineID,
+			"machine_id": machineID,
 			"card_id":    cardID,
 			"outcome":    outcome,
 			"mode":       machinesExecMode(p),

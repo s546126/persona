@@ -174,9 +174,10 @@ func startFakePTYExtension(t *testing.T, socket string, manifest json.RawMessage
 					Namespaces: map[string]ext.Handler{
 						ext.TerminalNamespace: ext.HandleTerminal(ext.TerminalFuncs{
 							OnOpen: func(_ context.Context, p wire.TerminalOpenParams) (wire.TerminalOpenResult, error) {
+								sid := string(p.SessionID)
 								f.mu.Lock()
-								f.opened[p.SessionID] = p
-								f.seq[p.SessionID] = 0
+								f.opened[sid] = p
+								f.seq[sid] = 0
 								f.mu.Unlock()
 								return wire.TerminalOpenResult{SessionID: p.SessionID, Title: "PTY " + p.Target}, nil
 							},
@@ -193,14 +194,16 @@ func startFakePTYExtension(t *testing.T, socket string, manifest json.RawMessage
 								return hubRef.TerminalFrame(sid, seq, append([]byte("ECHO:"), data...))
 							},
 							OnResize: func(_ context.Context, p wire.TerminalResizeParams) error {
+								sid := string(p.SessionID)
 								f.mu.Lock()
-								f.resizes[p.SessionID] = append(f.resizes[p.SessionID], p)
+								f.resizes[sid] = append(f.resizes[sid], p)
 								f.mu.Unlock()
 								return nil
 							},
 							OnClose: func(_ context.Context, p wire.TerminalCloseParams) error {
+								sid := string(p.SessionID)
 								f.mu.Lock()
-								f.closed[p.SessionID] = p
+								f.closed[sid] = p
 								f.mu.Unlock()
 								select {
 								case f.closedC <- p:

@@ -15,12 +15,19 @@
     "terminal.closed": {"from": "program", "params": "TerminalClosedEvent"}
   },
   "$defs": {
+    "TerminalSessionID": {
+      "type": "string",
+      "x-id": "TerminalSessionID",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Manager-assigned opaque interactive PTY session id."
+    },
     "TerminalOpenParams": {
       "description": "terminal.open: open an interactive PTY session for target at cols x rows.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "session_id": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Manager-assigned opaque PTY session id."},
+        "session_id": {"$ref": "#/$defs/TerminalSessionID"},
         "target": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Extension-defined terminal target identifier."},
         "cols": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Initial terminal width in columns."},
         "rows": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Initial terminal height in rows."}
@@ -31,7 +38,7 @@
       "description": "terminal.open's answer: confirms the opened PTY session and optional display title.",
       "type": "object",
       "properties": {
-        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "session_id": {"$ref": "#/$defs/TerminalSessionID"},
         "title": {"type": "string", "maxLength": 200}
       },
       "required": ["session_id"]
@@ -41,7 +48,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "session_id": {"$ref": "#/$defs/TerminalSessionID"},
         "data_b64": {"type": "string", "maxLength": 87384, "description": "Base64-encoded raw bytes to write to the PTY master."}
       },
       "required": ["session_id", "data_b64"]
@@ -51,7 +58,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "session_id": {"$ref": "#/$defs/TerminalSessionID"},
         "cols": {"type": "integer", "minimum": 1, "maximum": 1000},
         "rows": {"type": "integer", "minimum": 1, "maximum": 1000}
       },
@@ -62,7 +69,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "session_id": {"$ref": "#/$defs/TerminalSessionID"},
         "reason": {"type": "string", "maxLength": 200}
       },
       "required": ["session_id"]
@@ -72,7 +79,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "session_id": {"$ref": "#/$defs/TerminalSessionID"},
         "seq": {"type": "integer", "minimum": 1},
         "data_b64": {"type": "string", "maxLength": 87384}
       },
@@ -83,7 +90,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "session_id": {"$ref": "#/$defs/TerminalSessionID"},
         "exit_code": {"type": "integer", "x-go-pointer": true},
         "reason": {"type": "string", "maxLength": 200}
       },

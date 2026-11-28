@@ -196,6 +196,17 @@ var goTypes = map[string]any{
 	"MachinesPairLinkResult": wire.MachinesPairLinkResult{},
 	"MachinesStatusParams":   wire.MachinesStatusParams{},
 	"MachinesStatusResult":   wire.MachinesStatusResult{},
+	"MachinesExecParams":     wire.MachinesExecParams{},
+	"MachinesExecResult":     wire.MachinesExecResult{},
+
+	// Interactive PTY terminal session calls and events (extmgr/extension_terminal.go, #16741).
+	"TerminalOpenParams":   wire.TerminalOpenParams{},
+	"TerminalOpenResult":   wire.TerminalOpenResult{},
+	"TerminalInputParams":  wire.TerminalInputParams{},
+	"TerminalResizeParams": wire.TerminalResizeParams{},
+	"TerminalCloseParams":  wire.TerminalCloseParams{},
+	"TerminalFrameEvent":   wire.TerminalFrameEvent{},
+	"TerminalClosedEvent":  wire.TerminalClosedEvent{},
 
 	// The manager decodes an extension's browser calls into the generated wire types and answers with them
 	// (extmgr/extension_browser.go).

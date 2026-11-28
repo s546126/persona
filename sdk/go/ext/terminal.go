@@ -82,7 +82,7 @@ func HandleTerminal(h TerminalHandler) Handler {
 			if len(raw) > TerminalMaxFrameBytes {
 				return Empty{}, &Error{Code: "invalid_params", Message: "input frame exceeds 64 KiB"}
 			}
-			return Empty{}, h.Input(ctx, p.SessionID, raw)
+			return Empty{}, h.Input(ctx, string(p.SessionID), raw)
 		}),
 		"resize": Method(func(ctx context.Context, p wire.TerminalResizeParams) (Empty, error) {
 			if p.SessionID == "" || p.Cols < 1 || p.Rows < 1 {
@@ -108,8 +108,8 @@ func (h *Hub) TerminalFrame(sessionID string, seq int, data []byte) error {
 	if len(data) > TerminalMaxFrameBytes {
 		return errors.New("terminal.frame: data exceeds 64 KiB")
 	}
-	return h.Notify(TerminalNamespace+".frame", wire.TerminalFrameEvent{
-		SessionID: sessionID,
+	return h.Notify(wire.EventTerminalFrame, wire.TerminalFrameEvent{
+		SessionID: wire.TerminalSessionID(sessionID),
 		Seq:       seq,
 		DataB64:   base64.StdEncoding.EncodeToString(data),
 	})
@@ -120,8 +120,8 @@ func (h *Hub) TerminalClosed(sessionID string, exitCode *int, reason string) err
 	if sessionID == "" {
 		return errors.New("terminal.closed: session_id is required")
 	}
-	return h.Notify(TerminalNamespace+".closed", wire.TerminalClosedEvent{
-		SessionID: sessionID,
+	return h.Notify(wire.EventTerminalClosed, wire.TerminalClosedEvent{
+		SessionID: wire.TerminalSessionID(sessionID),
 		ExitCode:  exitCode,
 		Reason:    reason,
 	})

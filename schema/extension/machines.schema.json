@@ -56,12 +56,18 @@
       },
       "required": ["machine_id", "exists", "online", "node_online", "pending"]
     },
+    "HubMachineID": {
+      "type": "string",
+      "x-id": "HubMachineID",
+      "minLength": 1,
+      "description": "A computer's hub machine id."
+    },
     "MachinesExecParams": {
       "description": "machines.exec (machines.exec): run one command on a confirmed, online computer after the owner approves it on a confirmation card. Provide exactly one of argv (direct exec without shell) or command (run via /bin/sh -c).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "machine_id": {"type": "string", "minLength": 1, "description": "The computer's hub machine id."},
+        "machine_id": {"$ref": "#/$defs/HubMachineID"},
         "argv": {"type": "array", "maxItems": 64, "items": {"type": "string"}, "description": "Direct executable and arguments without a shell (mutually exclusive with command; at most 64 items, total <= 4096 bytes, no NUL bytes)."},
         "command": {"type": "string", "maxLength": 1024, "description": "Shell command executed via /bin/sh -c (mutually exclusive with argv; at most 1024 characters, no NUL bytes)."},
         "cwd": {"type": "string", "maxLength": 4096, "description": "Optional working directory on the computer."},
@@ -74,7 +80,7 @@
     "MachinesExecResult": {
       "type": "object",
       "properties": {
-        "machine_id": {"type": "string"},
+        "machine_id": {"$ref": "#/$defs/HubMachineID"},
         "exit_code": {"type": "integer"},
         "output": {"type": "string", "description": "Combined stdout and stderr, safely truncated to max_output_bytes when needed."},
         "truncated": {"type": "boolean", "description": "Whether output exceeded max_output_bytes and was truncated."},

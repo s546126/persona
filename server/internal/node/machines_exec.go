@@ -68,7 +68,7 @@ func (w *limitedWriter) snapshot() (string, bool) {
 
 // ValidateMachinesExecParams checks bounds and mutual exclusivity of machines.exec params.
 func ValidateMachinesExecParams(p *wire.MachinesExecParams) error {
-	p.MachineID = strings.TrimSpace(p.MachineID)
+	p.MachineID = wire.HubMachineID(strings.TrimSpace(string(p.MachineID)))
 	if p.MachineID == "" {
 		return &rpc.Error{Code: "invalid_params", Message: "machine_id is required"}
 	}
@@ -224,7 +224,7 @@ func (n *Node) machinesExec(ctx context.Context, raw json.RawMessage) (wire.Mach
 	text, truncated := out.snapshot()
 	machineID := p.MachineID
 	if n.machineID != "" {
-		machineID = n.machineID
+		machineID = wire.HubMachineID(n.machineID)
 	}
 	return wire.MachinesExecResult{
 		MachineID:  machineID,

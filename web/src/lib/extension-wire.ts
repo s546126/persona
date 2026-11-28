@@ -662,12 +662,21 @@ export type DiskOffloadKind = "file" | "dir" | "app" | (string & {});
 export const DISK_OFFLOAD_KINDS = ["file", "dir", "app"] as const;
 
 /**
+ * Identifies one terminal_sessions provider within its extension.
+ */
+export type TerminalSessionContributionID = string & { readonly __brand: "TerminalSessionContributionID" };
+/** A TerminalSessionContributionID from its raw string. */
+export function terminalSessionContributionID(raw: string): TerminalSessionContributionID {
+  return raw as TerminalSessionContributionID;
+}
+
+/**
  * An interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize, terminal.close;
  * terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer machines/herdr panes;
  * only full devices may open or type after explicit owner confirmation.
  */
 export interface TerminalSessionItem {
-  id: string;
+  id: TerminalSessionContributionID;
   /** Display label for the terminal provider. */
   title?: string;
   description?: string;

@@ -18,37 +18,39 @@ const extTerminalMaxClientFrameBytes = 128 << 10
 // only roleFull devices may open or write to an extension terminal, and every message is forwarded
 // exclusively to the extension manager over extwire.ExtTerminalMethod.
 func (h *Hub) forwardExtTerminal(ctx context.Context, c *client, raw []byte) {
-	var header struct {
-		Type      string `json:"type"`
-		Manager   string `json:"manager"`
-		Extension string `json:"extension"`
-		Target    string `json:"target"`
-		SessionID string `json:"session_id"`
-	}
-	_ = json.Unmarshal(raw, &header)
+	var env extwire.ExtTerminalClientEnvelope
+	unmarshalErr := json.Unmarshal(raw, &env)
 	if c.role != roleFull || c.uiConnection == "" {
-		c.sendJSON(map[string]any{
-			"type":       "ext_terminal_error",
-			"session_id": header.SessionID,
-			"extension":  header.Extension,
-			"target":     header.Target,
-			"code":       "forbidden",
-			"error":      "interactive extension terminal requires a full device",
+		c.sendJSON(extwire.ExtTerminalEvent{
+			Type:      extwire.ExtTerminalEventError,
+			SessionID: env.SessionID,
+			Extension: env.Extension,
+			Target:    env.Target,
+			Code:      "forbidden",
+			Error:     "interactive extension terminal requires a full device",
 		})
 		return
 	}
 	if len(raw) > extTerminalMaxClientFrameBytes {
-		c.sendJSON(map[string]any{
-			"type":       "ext_terminal_error",
-			"session_id": header.SessionID,
-			"extension":  header.Extension,
-			"target":     header.Target,
-			"code":       "frame_too_large",
-			"error":      "terminal frame exceeds size limit",
+		c.sendJSON(extwire.ExtTerminalEvent{
+			Type:      extwire.ExtTerminalEventError,
+			SessionID: env.SessionID,
+			Extension: env.Extension,
+			Target:    env.Target,
+			Code:      "frame_too_large",
+			Error:     "terminal frame exceeds size limit",
 		})
 		return
 	}
-	manager := header.Manager
+	if unmarshalErr != nil {
+		c.sendJSON(extwire.ExtTerminalEvent{
+			Type:  extwire.ExtTerminalEventError,
+			Code:  "invalid_message",
+			Error: "invalid terminal message",
+		})
+		return
+	}
+	manager := env.Manager
 	if manager == "" {
 		manager = h.defaultOwner(ctx)
 	}
@@ -67,13 +69,13 @@ func (h *Hub) forwardExtTerminal(ctx context.Context, c *client, raw []byte) {
 		select {
 		case c.extTermRequests <- struct{}{}:
 		default:
-			c.sendJSON(map[string]any{
-				"type":       "ext_terminal_error",
-				"session_id": header.SessionID,
-				"extension":  header.Extension,
-				"target":     header.Target,
-				"code":       "busy",
-				"error":      "too many pending terminal requests",
+			c.sendJSON(extwire.ExtTerminalEvent{
+				Type:      extwire.ExtTerminalEventError,
+				SessionID: env.SessionID,
+				Extension: env.Extension,
+				Target:    env.Target,
+				Code:      "busy",
+				Error:     "too many pending terminal requests",
 			})
 			return
 		}
@@ -85,15 +87,15 @@ func (h *Hub) forwardExtTerminal(ctx context.Context, c *client, raw []byte) {
 		}
 		callCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		if _, err := buswire.Call(callCtx, h.managerCaller(manager), extwire.ExtTerminalMethod, extwire.ExtTerminalCall{Who: who, Envelope: raw}); err != nil {
-			c.sendJSON(map[string]any{
-				"type":       "ext_terminal_error",
-				"session_id": header.SessionID,
-				"extension":  header.Extension,
-				"target":     header.Target,
-				"manager":    manager,
-				"code":       "manager_unavailable",
-				"error":      "extension manager unavailable",
+		if _, err := buswire.Call(callCtx, h.managerCaller(manager), extwire.ExtTerminalMethod, extwire.ExtTerminalCall{Who: who, Envelope: env}); err != nil {
+			c.sendJSON(extwire.ExtTerminalEvent{
+				Type:      extwire.ExtTerminalEventError,
+				SessionID: env.SessionID,
+				Extension: env.Extension,
+				Target:    env.Target,
+				Manager:   manager,
+				Code:      "manager_unavailable",
+				Error:     "extension manager unavailable",
 			})
 		}
 	}()
@@ -121,7 +123,7 @@ func init() {
 			return
 		}
 		var target extwire.ExtTerminalTarget
-		if json.Unmarshal(params, &target) != nil || target.Who.Hub != h.hubID() || len(target.Envelope) > extTerminalMaxClientFrameBytes {
+		if json.Unmarshal(params, &target) != nil || target.Who.Hub != h.hubID() || !target.Event.Type.Valid() {
 			return
 		}
 		// Private per-connection delivery: never broadcast or add to global event replay log.
@@ -138,14 +140,10 @@ func init() {
 			if !allowed {
 				return
 			}
-			var envelope map[string]json.RawMessage
-			if json.Unmarshal(target.Envelope, &envelope) != nil {
-				return
-			}
-			delete(envelope, "event_seq")
-			envelope["manager"], _ = json.Marshal(bus.managerID())
-			raw, err := json.Marshal(envelope)
-			if err == nil {
+			ev := target.Event
+			ev.Manager = bus.managerID()
+			raw, err := json.Marshal(ev)
+			if err == nil && len(raw) <= extTerminalMaxClientFrameBytes {
 				c.queue(raw)
 			}
 			return

@@ -634,12 +634,18 @@
       "type": "string",
       "enum": ["file", "dir", "app"]
     },
+    "TerminalSessionContributionID": {
+      "type": "string",
+      "x-id": "TerminalSessionContributionID",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+      "description": "Identifies one terminal_sessions provider within its extension."
+    },
     "TerminalSessionItem": {
       "description": "An interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize, terminal.close; terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer machines/herdr panes; only full devices may open or type after explicit owner confirmation.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": {"$ref": "#/$defs/ID"},
+        "id": {"$ref": "#/$defs/TerminalSessionContributionID"},
         "title": {"type": "string", "minLength": 1, "maxLength": 80, "description": "Display label for the terminal provider."},
         "description": {"type": "string", "maxLength": 200},
         "max_sessions": {"type": "integer", "minimum": 1, "maximum": 4, "description": "Optional concurrent session cap (default and hard limit 4 per extension)."}
