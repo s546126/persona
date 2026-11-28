@@ -97,7 +97,7 @@ final class AssistantViewModel: ExtensionViewControlling {
         var sent = action.submit == true ? submitted : [:]
         sent.merge(chosen) { _, choice in choice }
         let selection = Confirmation(action: action, page: page, values: sent, version: version)
-        if action.confirm?.isEmpty == false || (changed && action.reply != nil) { pending = selection; return .init() }
+        if action.confirm?.isEmpty == false || AssistantViewLink.requiresConfirmation(action.open) || (changed && action.reply != nil) { pending = selection; return .init() }
         return await execute(selection, confirmed: false)
     }
     func decline() { pending = nil }

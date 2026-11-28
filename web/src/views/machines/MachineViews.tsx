@@ -12,13 +12,14 @@ const ServicesPanel = lazyPage(() => import("./ServicesPanel").then((m) => m.Ser
 const FileBrowserPanel = lazyPage(() => import("./FileBrowserPanel").then((m) => m.FileBrowserPanel));
 const NetworkPanel = lazyPage(() => import("./NetworkPanel").then((m) => m.NetworkPanel));
 const StoragePanel = lazyPage(() => import("./StoragePanel").then((m) => m.StoragePanel));
+const MachineTerminalSubview = lazyPage(() => import("./MachineTerminalSubview").then((m) => m.MachineTerminalSubview));
 
 const labels = {
-  work: "machines.view_work", monitoring: "machines-machinedetail.monitoring", files: "machines.view_files",
+  work: "machines.view_work", monitoring: "machines-machinedetail.monitoring", terminal: "machines.view_terminal", files: "machines.view_files",
   storage: "machines.view_storage", diagnostics: "machines.view_diagnostics", management: "machines.view_management",
   procs: "machines.view_procs", services: "machines.view_services", network: "machines-network.tab_label", toolchain: "machines.view_toolchain",
 } as const;
-const primary = ["work", "monitoring", "files", "storage", "diagnostics", "management"] as const;
+const primary = ["work", "monitoring", "terminal", "files", "storage", "diagnostics", "management"] as const;
 const tools = { procs: PortsProcessesPanel, services: ServicesPanel, toolchain: ToolchainPanel, network: NetworkPanel };
 type Diagnostic = keyof typeof tools;
 function isDiagnostic(view: MachineSubview): view is Diagnostic {
@@ -59,6 +60,7 @@ export function MachineViewLinks({ mid, view }: { mid: string; view: MachineSubv
 export function MachineToolView({ machine, view, mode, path }: { machine: Machine; view: MachineSubview; path?: string; mode?: "reclaim" }) {
   const Panel = isDiagnostic(view) ? tools[view] : null;
   return <Suspense fallback={<Loading />}>
+    {view === "terminal" && <MachineTerminalSubview machine={machine} />}
     {view === "files" && <FileBrowserPanel key={path} machine={machine} path={path} routed />}
     {Panel && <Panel machine={machine} />}
     {view === "storage" && <StoragePanel machine={machine} focus={mode && { mid: machine.id, mode, seq: 1 }} />}

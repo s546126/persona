@@ -22,15 +22,21 @@ import (
 // app draws, so that a view is refused or drawn alike for every app; then what the app gets is checked again
 // (wire.CheckFitted), a compact one to its limits. It says what types it left out.
 func Fit(v *View, slot UISlot, uiVersion int, languages ...i18n.Lang) (dropped []string, err error) {
-	return fit(v, slot, uiVersion, nil, false, languages...)
+	return fit(v, slot, uiVersion, "", nil, false, languages...)
 }
 
 // FitFor is Fit with an optional list of component types the client cannot draw even within uiVersion.
 func FitFor(v *View, slot UISlot, uiVersion int, unsupported []string, languages ...i18n.Lang) (dropped []string, err error) {
-	return fit(v, slot, uiVersion, unsupported, false, languages...)
+	return fit(v, slot, uiVersion, "", unsupported, false, languages...)
 }
 
-func fit(v *View, slot UISlot, uiVersion int, unsupported []string, native bool, languages ...i18n.Lang) (dropped []string, err error) {
+// FitForExtension is FitFor bound to extID so persona://ext-terminal/<ext>/<target> actions pointing to another
+// extension are stripped on full pages.
+func FitForExtension(v *View, slot UISlot, uiVersion int, extID string, unsupported []string, languages ...i18n.Lang) (dropped []string, err error) {
+	return fit(v, slot, uiVersion, extID, unsupported, false, languages...)
+}
+
+func fit(v *View, slot UISlot, uiVersion int, extID string, unsupported []string, native bool, languages ...i18n.Lang) (dropped []string, err error) {
 	l := i18n.Default
 	if len(languages) > 0 {
 		l = languages[0].Or(i18n.Default)
@@ -39,8 +45,9 @@ func fit(v *View, slot UISlot, uiVersion int, unsupported []string, native bool,
 		return nil, errors.New("no view")
 	}
 	if FullPage(slot.Name) {
-		// A full page may navigate to an existing Persona session or to-do; its open is kept only for those targets.
-		dropped = wire.StripAssistantFieldsForPage(v)
+		// A full page may navigate to validated internal destinations (session, task, terminal, own ext-terminal);
+		// compact cards and sections strip all of them.
+		dropped = wire.StripAssistantFieldsForExtensionPage(v, extID)
 	} else {
 		dropped = wire.StripAssistantFields(v)
 	}
@@ -171,6 +178,11 @@ func FitResult(res *ActionResult, slot UISlot, uiVersion int, languages ...i18n.
 
 // FitResultFor is FitResult honoring client-declared unsupported component types.
 func FitResultFor(res *ActionResult, slot UISlot, uiVersion int, unsupported []string, languages ...i18n.Lang) error {
+	return FitResultForExtension(res, "", slot, uiVersion, unsupported, languages...)
+}
+
+// FitResultForExtension is FitResultFor bound to extID for persona://ext-terminal/<ext>/<target> checks.
+func FitResultForExtension(res *ActionResult, extID string, slot UISlot, uiVersion int, unsupported []string, languages ...i18n.Lang) error {
 	l := i18n.Default
 	if len(languages) > 0 {
 		l = languages[0].Or(i18n.Default)
@@ -205,7 +217,7 @@ func FitResultFor(res *ActionResult, slot UISlot, uiVersion int, unsupported []s
 		fitVersion = UIVersion
 		fitUnsupported = nil
 	}
-	if _, err := FitFor(&v, slot, fitVersion, fitUnsupported, l); err != nil {
+	if _, err := FitForExtension(&v, slot, fitVersion, extID, fitUnsupported, l); err != nil {
 		return err
 	}
 	if len(v.Sections) == 0 || len(v.Sections[0].Items) != len(res.Items) {

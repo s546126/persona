@@ -152,6 +152,7 @@ What an extension contributes where is written in the manifest's `contributes`: 
 | `memory_sources` (version 1, #13532, #13586) | `memory.` | `id`, `name` (1–80 characters, not only spaces, no control characters: what settings call the source); one per extension | Process speaks the protocol | The extension's memory, entry by entry: the manager reads it with `memory.entries` (`schema/extension/memory.schema.json`) and grades each entry by scene itself, and stops delivering the extension's own text outlets directly; the install page says so, the permission digest does not change; see "Memory sources" below |
 | `disk_offload` (version 1, #14576) | `offload.` | `id`, `name` (1–40 characters: the disk map offers "Offload to <name>"), `kinds?` (1–3 of `file`, `dir`, `app`, each once; omitted means `file`, `dir`), `restore?` (items can be brought back) | Process speaks the protocol | A provider for a computer's disk usage map: the map lists the enabled contributions, draws what the provider already holds of that computer beside the local map (`offload.inventory`), and, after the user confirmed and the computer's own protection rules agreed to every path, starts an offload or restore (`offload.run`, followed with `offload.job`, the optional `offload.cancel`; `schema/extension/offload.schema.json`). Asked by the manager only, each answer held to the schema; see "Disk offload" below |
 | `track_kinds` (version 1, #14574) | `track_kinds.` | `id`, `title`, `config` (`schema: 1`, the declarative `assistantwire.TrackKindConfig`: template, context, categories, rhythms, attention, supervision, usage, assembly, capture target, channels and sidebar) | Declarative only; the manager validates every field and option | The headless assistant track registry and execution policy. The optional `space-conversations` extension contributes the `space` kind. An extension-provided kind is read-only through the custom-kind API; disabling its provider hides its surface but preserves existing records and conversations. |
+| `terminal_sessions` (version 1, #16741) | `terminal.` | `id`, `title`, `description?` | Process speaks the protocol | Interactive PTY sessions provided by the extension (`terminal.open`, `terminal.input`, `terminal.resize`, `terminal.close`; events `terminal.frame`, `terminal.closed`; `schema/extension/terminal.schema.json`), transported over isolated `ext_terminal_*` WebSocket frames for `roleFull` devices only. |
 
 Extension points the hub doesn't know: the extension still installs (it may be written for a newer hub), that item has no effect, and the preview and list show a warning. When adding extension points later (knowledge base sources, link recognition…), add a row to this table.
 
@@ -2737,12 +2738,32 @@ Extensions **do not run code in the app**: they return a View (a few fixed kinds
 and button actions go back to the extension. Views and components are defined in `schema/extension/view.schema.json` (the types on all four clients are generated from it, see [schema/extension/README.md](../../schema/extension/README.md));
 the hub first checks against the schema (`wire.Validate`, `sdk/go/wire`), then checks what the schema cannot express (item count per page, no duplicate field names, consistent labels across chart series), in `server/internal/extension/ui.go`.
 
-A full page (`nav_page`, `extension_page`) may also use an action's `open` to navigate to an existing Persona **session**
-(`persona://session/<machine>/<session>`) or **to-do** (`persona://task/<id>`). A tap only routes, using the same validated
-targets and in-app routes as assistant cards: it sends no message, changes no destination data, returns no destination
-content to the extension, and Back returns to the page with its state. Every other `open` target (https, knowledge files,
-machine files) and the other assistant-only action fields (`reply`, `pop`, a page `push`) stay unavailable to extensions;
-cards (`overview_card`, `capsule_card`) keep no `open` at all.
+A full page (`nav_page`, `extension_page`, `plugin_page`) may also use an action's `open` to navigate to an existing Persona **session**
+(`persona://session/<machine>/<session>`), **to-do** (`persona://task/<id>`), **machine native terminal**
+(`persona://terminal/<machine_id>`), or the extension's own **interactive PTY terminal**
+(`persona://ext-terminal/<ext_id>/<target_id>`, where `<ext_id>` must match the extension's own ID). A tap only routes,
+using validated targets and in-app routes: it sends no message, changes no destination data, returns no destination
+content to the extension, and Back returns to the page with its state. Navigating to `persona://terminal/<machine_id>`
+or `persona://ext-terminal/<ext_id>/<target_id>` **always requires explicit owner confirmation** on the client (even
+when the action omits `confirm`), and native terminal streams or credentials never pass through the extension. Every
+other `open` target (https, knowledge files, machine files) and the other assistant-only action fields (`reply`, `pop`,
+a page `push`) stay unavailable to extensions; cards (`overview_card`, `capsule_card`), `inbox_item`, and `*_section`
+slots strip all `open` actions.
+
+### Extension WebShell: `machines.exec` and `terminal_sessions` (#16741)
+
+1. **Confirmed `machines.exec` RPC** (`schema/extension/machines.schema.json`):
+   - Requires the explicit named hub scope `machines.exec` (never included in legacy full-hub tokens; `InEveryScope("machines.exec")` is `false`).
+   - Parameters (`additionalProperties: false`): `machine_id`, mutually exclusive `argv` (≤ 64 items, ≤ 4096 bytes total, no NUL; executed directly without a shell) or `command` (≤ 1024 chars; executed via `/bin/sh -c`), optional `cwd`, `timeout_ms` (default 20000, max 60000), `max_output_bytes` (default 16384, max 65536), and `reason` (≤ 200 chars).
+   - Every invocation sends an owner approval card (`approveCard`) showing the extension name, target machine, full command/argv, cwd, and reason. Denied or timed-out approvals are rejected before reaching the hub or node, and redacted audit records are written.
+   - The hub verifies manager ownership, machine confirmation (not pending), online status, and node `machines_exec` capability (returning `node_outdated` for older nodes). The node executes with `Stdin = nil`, kills the entire process group on timeout/cancel, and truncates merged output cleanly at `max_output_bytes`.
+
+2. **Interactive PTY streaming (`contributes.terminal_sessions`, `schema/extension/terminal.schema.json`)**:
+   - Extensions declare `contributes.terminal_sessions` (`[{id, title, description?}]`) and implement the `terminal.*` RPC namespace: `terminal.open { session_id, target, cols, rows }`, `terminal.input { session_id, data_b64 }`, `terminal.resize { session_id, cols, rows }`, and `terminal.close { session_id, reason? }`.
+   - The extension pushes ordered PTY output via `terminal.frame { session_id, seq, data_b64 }` and exit notifications via `terminal.closed { session_id, exit_code?, reason? }`.
+   - Client transport uses isolated WebSocket messages (`ext_terminal_open`, `ext_terminal_subscribe`, `ext_terminal_input`, `ext_terminal_resize`, `ext_terminal_close`; server pushes `ext_terminal_opened`, `ext_terminal_frame`, `ext_terminal_closed`, `ext_terminal_error`) completely separate from native `machine_id` / `herdr` panes.
+   - Guardrails: `roleFull` devices only (watch-only, scoped, read-only, and extension tokens are refused), explicit owner confirmation (`confirmed: true`) required to open, max 4 concurrent sessions per extension, max 64 KiB per frame, 30-minute idle timeout auto-reap, and automatic `terminal.close` when the last subscriber disconnects.
+   - Web renders interactive extension terminals at `/extension/<ext_id>/terminal/<target_id>` using `@xterm/xterm` with full ANSI, 256-color/truecolor, alternate screen (`vim`/`tmux`/`htop`), and `ResizeObserver` dimension syncing.
 
 **Where it goes** (the `placement` of a `ui` contribution): see the slot table in the next section, "UI slots". The first two:
 

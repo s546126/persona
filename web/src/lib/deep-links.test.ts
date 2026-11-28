@@ -108,6 +108,10 @@ describe("deep links: pages and paths", () => {
     expect(appPath("persona://open?route=%2Fpersona%2Fc-1")).toBe("/persona/c-1");
     expect(appPath("persona://task/t-1")).toBe("/todos/t-1");
     expect(appPath("persona://session/m/s?at=x")).toBe("/s/m/s?at=x");
+    expect(appPath("persona://terminal/mac-1")).toBe("/machines/mac-1/terminal");
+    expect(appPath("persona://ext-terminal/ensemble/shell-1")).toBe("/extension/ensemble/terminal/shell-1");
+    expect(parseRoute("/machines/mac-1/terminal")).toEqual({ name: "machine", mid: "mac-1", subview: "terminal" });
+    expect(parseRoute("/extension/ensemble/terminal/shell-1")).toEqual({ name: "ext-terminal", extension: "ensemble", target: "shell-1" });
     for (const none of ["persona://open//evil.example/x", "persona://open/admin", "persona://open?route=https%3A%2F%2Fevil.example", "persona://pair?url=x"]) {
       expect(appPath(none), none).toBeNull();
     }

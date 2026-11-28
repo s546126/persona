@@ -46,12 +46,13 @@ Query keys not listed for a row are dropped (not passed on, not acted on). Fragm
 | A knowledge entry | `/kb/<kind>/<id>` | | native | in place | native |
 | Computers | `/machines` | | Computers | in place | native |
 | A computer | `/machines/<id>` | `range` | native | in place | native |
-| A computer subview | `/machines/<id>/<subview>` | `path` for files, `range` for monitoring, `mode=reclaim` for storage | web only | in place | web only |
+| A computer subview | `/machines/<id>/<subview>` | `path` for files, `range` for monitoring, `mode=reclaim` for storage | native (`terminal`), web for others | in place | native (`terminal`), web for others |
 | Settings | `/settings` | `tab`, the tab's item key, `manager` | the matching page | in place | native |
 | An extension's page | `/extension/<extension>/<ui>` | `state` | native | in place | native |
+| An extension's interactive terminal | `/extension/<extension>/terminal/<target>` | | web card | in place | web |
 
 On the web, a bare computer address opens Work. Existing links with a monitoring range
-(`1h`, `6h` or `24h`) open Monitoring. The supported subviews are `work`, `monitoring`, `files`,
+(`1h`, `6h` or `24h`) open Monitoring. The supported subviews are `work`, `monitoring`, `terminal`, `files`,
 `storage`, `diagnostics`, `procs`, `services`, `toolchain`, `network` and `management` (`config` is an alias).
 The legacy `#engine` bookmark on a computer opens Management. An unknown subview shows Page not found. Older fleet history entries carrying a reclaim request resolve
 in place to `/machines/<id>/storage?mode=reclaim`. Opening reclaim displays the map and its suggestions. The older `/cleanup` and `/storage/cleanup`
@@ -95,6 +96,8 @@ These name the same pages and are read wherever links are read. Nothing new writ
 | `persona://settings/extensions/<id>` | `/settings?tab=extensions&extension=<id>` |
 | `persona://settings/extensions/<id>?set=<url-encoded JSON object>` | that settings page with the proposed ordinary configuration values filled in (Web; nothing is saved until Save) |
 | `persona://extension/<extension>/<ui>[?state=]` | `/extension/<extension>/<ui>[?state=]` |
+| `persona://terminal/<machine_id>` | `/machines/<machine_id>/terminal` (full extension pages only; always requires explicit owner confirmation before navigation) |
+| `persona://ext-terminal/<ext_id>/<target_id>` | `/extension/<ext_id>/terminal/<target_id>` (full extension pages only, `<ext_id>` must match the emitting extension; always requires explicit owner confirmation before navigation) |
 
 The older product name's scheme and paths are accepted as these are (`docs/protocol/rolling-upgrade-compatibility.md`).
 The `set` form is deliberately narrow: one object of known ordinary configuration fields, at most 2 KiB decoded, with no

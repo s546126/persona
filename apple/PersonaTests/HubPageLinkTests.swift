@@ -172,6 +172,7 @@ struct HubPageLinkTests {
         case .knowledgeEntry(let kind, let id): return with("knowledge-entry", ["kind": kind, "id": id])
         case .machines: return with("machines", [:])
         case .machine(let id): return with("machine", ["id": id])
+        case .machineTerminal(let id): return with("machine", ["id": id, "subview": "terminal"])
         case .settings(let tab, let item): return with("settings", ["tab": tab, "item": item])
         case .extensionPage(let ext, let ui, let state): return with("extension", ["extension": ext, "ui": ui, "state": state])
         }

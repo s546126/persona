@@ -1,12 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "machines.schema.json",
-  "title": "Machine pairing and status",
-  "description": "Requesting a one-time active-mode computer pairing link and checking computer connection status from an extension (#12798): machines.pair_link requires machines.pair in permissions.hub (always creates or re-issues for a pending link computer, which still requires the owner's confirmation), and machines.status requires machines.read or machines.pair. Params are strict: an unknown field is invalid_params. Plugin-side: only the hub and the program speak it.",
+  "title": "Machine pairing, status and confirmed execution",
+  "description": "Requesting a one-time active-mode computer pairing link, checking computer connection status, and running owner-confirmed commands from an extension (#12798, #16741): machines.pair_link requires machines.pair in permissions.hub (always creates or re-issues for a pending link computer, which still requires the owner's confirmation), machines.status requires machines.read or machines.pair, and machines.exec requires machines.exec (granted by name only; every call requires an explicit owner confirmation card before reaching the computer). Params are strict: an unknown field is invalid_params. Plugin-side: only the hub and the program speak it.",
   "x-side": "plugin",
   "x-methods": {
     "machines.pair_link": {"from": "program", "params": "MachinesPairLinkParams", "result": "MachinesPairLinkResult"},
-    "machines.status": {"from": "program", "params": "MachinesStatusParams", "result": "MachinesStatusResult"}
+    "machines.status": {"from": "program", "params": "MachinesStatusParams", "result": "MachinesStatusResult"},
+    "machines.exec": {"from": "program", "params": "MachinesExecParams", "result": "MachinesExecResult"}
   },
   "$defs": {
     "MachinesPairLinkParams": {
@@ -54,6 +55,34 @@
         "error": {"type": "string", "description": "Last connection error, if any."}
       },
       "required": ["machine_id", "exists", "online", "node_online", "pending"]
+    },
+    "MachinesExecParams": {
+      "description": "machines.exec (machines.exec): run one command on a confirmed, online computer after the owner approves it on a confirmation card. Provide exactly one of argv (direct exec without shell) or command (run via /bin/sh -c).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "machine_id": {"type": "string", "minLength": 1, "description": "The computer's hub machine id."},
+        "argv": {"type": "array", "maxItems": 64, "items": {"type": "string"}, "description": "Direct executable and arguments without a shell (mutually exclusive with command; at most 64 items, total <= 4096 bytes, no NUL bytes)."},
+        "command": {"type": "string", "maxLength": 1024, "description": "Shell command executed via /bin/sh -c (mutually exclusive with argv; at most 1024 characters, no NUL bytes)."},
+        "cwd": {"type": "string", "maxLength": 4096, "description": "Optional working directory on the computer."},
+        "timeout_ms": {"type": "integer", "minimum": 0, "maximum": 60000, "description": "Execution timeout in milliseconds (default 20000, max 60000)."},
+        "max_output_bytes": {"type": "integer", "minimum": 0, "maximum": 65536, "description": "Maximum combined stdout and stderr bytes to return (default 16384, max 65536)."},
+        "reason": {"type": "string", "maxLength": 200, "description": "Optional human-readable explanation shown on the owner confirmation card."}
+      },
+      "required": ["machine_id"]
+    },
+    "MachinesExecResult": {
+      "type": "object",
+      "properties": {
+        "machine_id": {"type": "string"},
+        "exit_code": {"type": "integer"},
+        "output": {"type": "string", "description": "Combined stdout and stderr, safely truncated to max_output_bytes when needed."},
+        "truncated": {"type": "boolean", "description": "Whether output exceeded max_output_bytes and was truncated."},
+        "duration_ms": {"type": "integer", "x-go-type": "int64"},
+        "timed_out": {"type": "boolean"},
+        "cancelled": {"type": "boolean"}
+      },
+      "required": ["machine_id", "exit_code", "output", "truncated", "duration_ms"]
     }
   }
 }

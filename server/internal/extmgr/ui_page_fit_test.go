@@ -163,11 +163,11 @@ func TestPageFitMemoMatchesFitNativeUnsupported(t *testing.T) {
 
 	var memo pageFitMemo
 	slot := extension.UISlots[0]
-	keep, err := memo.fitNativeFor(rawWithKey, slot, 12, nil, i18n.En)
+	keep, err := memo.fitNativeFor(rawWithKey, "", slot, 12, nil, i18n.En)
 	if err != nil {
 		t.Fatal(err)
 	}
-	downgraded, err := memo.fitNativeFor(rawWithKey, slot, 12, []string{"map"}, i18n.En)
+	downgraded, err := memo.fitNativeFor(rawWithKey, "", slot, 12, []string{"map"}, i18n.En)
 	if err != nil {
 		t.Fatal(err)
 	}

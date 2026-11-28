@@ -92,6 +92,7 @@ const RequestPage = lazyPage(() => import("./views/RequestPage").then((m) => m.R
 const WorkspaceBoard = lazyPage(() => import("./views/WorkspaceBoard").then((m) => m.WorkspaceBoard), { routes: ["workspace-board"] });
 const Machines = lazyPage(() => import("./views/Machines").then((m) => m.Machines), { routes: ["machines", "machine"] });
 const TerminalPage = lazyPage(() => import("./views/terminal/TerminalPage").then((m) => m.TerminalPage), { routes: ["terminal"] });
+const ExtensionTerminalView = lazyPage(() => import("./views/extensions/ExtensionTerminalView").then((m) => m.ExtensionTerminalView), { routes: ["ext-terminal"] });
 const LarkOAuthReturn = lazyPage(() => import("./views/settings/LarkOAuthReturn").then((m) => m.LarkOAuthReturn), { routes: ["lark-oauth"] });
 const SubscriptionsPage = lazyPage(() => import("./views/subscriptions/SubscriptionsPage").then((m) => m.SubscriptionsPage), { routes: ["subscriptions"] });
 const SpacePage = lazyPage(() => import("./views/SpacePage").then((m) => m.SpacePage), { routes: ["space"] });
@@ -581,7 +582,7 @@ function Shell() {
   const title =
     inWorkView(route) || route.name === "terminal" ? t("work-entry.title") : pane ? agentTitle || "Agent" : route.name === "persona" ? "Persona" : route.name === "persona-new" ? t("app.title_new_chat") : route.name === "history" ? t("app.title_history") : route.name === "module" ? moduleTitle(route) ?? t("app.title_home") : route.name === "track" ? trackTitle || t("app.title_space") : route.name === "track-new" ? t("app.title_new_space") : route.name === "profile" ? t("app.title_profile") : route.name === "inbox" ? t("app.title_inbox") : route.name === "starred" ? t("starred.title")
       : route.name === "request" ? t("app.title_request") : route.name === "routines" ? t("app.title_routines") : route.name === "kb" ? t("app.title_kb") : route.name === "workspace-board" ? t("app.title_workspace_board") : route.name === "todos" ? t("app.title_todos") : route.name === "machines" || route.name === "machine" ? t("app.title_machines") : route.name === "space" ? route.space : route.name === "settings" || route.name === "lark-oauth" ? t("app.title_settings")
-      : route.name === "agents" ? t("app.title_agents") : route.name === "agent-list" ? "Agents" : route.name === "agent-archives" ? t("app.title_agent_archives") : route.name === "compare" ? t("app.title_compare_runs") : route.name === "extension" ? extensionTitle || t("app.title_extension") : route.name === "subscriptions" ? t("app.title_subscriptions") : route.name === "not-found" ? t("app.title_not_found") : t("app.title_home");
+      : route.name === "agents" ? t("app.title_agents") : route.name === "agent-list" ? "Agents" : route.name === "agent-archives" ? t("app.title_agent_archives") : route.name === "compare" ? t("app.title_compare_runs") : route.name === "extension" ? extensionTitle || t("app.title_extension") : route.name === "ext-terminal" ? route.target : route.name === "subscriptions" ? t("app.title_subscriptions") : route.name === "not-found" ? t("app.title_not_found") : t("app.title_home");
 
   // never reached the hub: say so with a way to try again, instead of pages loading forever (kept through a retry); the
   // Agents list reads the same flag, so the two always agree
@@ -683,6 +684,9 @@ function Shell() {
       main = moduleExtensionAt(route.extension)
         ? <ModuleExtensionPage key={`${route.extension}/${route.ui}${location.search}`} extension={route.extension} ui={route.ui} onToggleSidebar={toggle} />
         : <ExtensionNavPage key={`${route.extension}/${route.ui}`} extension={route.extension} ui={route.ui} onToggleSidebar={toggle} />;
+      break;
+    case "ext-terminal":
+      main = <ExtensionTerminalView key={`${route.extension}/${route.target}`} extension={route.extension} target={route.target} onToggleSidebar={toggle} />;
       break;
     case "not-found":
       main = <NotFound onToggleSidebar={toggle} />;

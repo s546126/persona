@@ -15,6 +15,7 @@ import (
 
 type pageRenderState struct {
 	id, epoch   string
+	extension   string
 	native      pageNative
 	manifest    *extension.Manifest
 	item        extension.UIItem
@@ -34,6 +35,7 @@ type pageFitMemo struct{ last atomic.Pointer[pageFit] }
 
 type pageFit struct {
 	raw         json.RawMessage
+	extID       string
 	slot        extension.UISlot
 	version     int
 	unsupported []string
@@ -44,18 +46,18 @@ type pageFit struct {
 // fitNative is extension.FitNative through m (nil: no memo). Only an accepted
 // view is kept; a refused one is fitted, and refused, again.
 func (m *pageFitMemo) fitNative(raw []byte, slot extension.UISlot, version int, lang i18n.Lang) (json.RawMessage, error) {
-	return m.fitNativeFor(raw, slot, version, nil, lang)
+	return m.fitNativeFor(raw, "", slot, version, nil, lang)
 }
 
-func (m *pageFitMemo) fitNativeFor(raw []byte, slot extension.UISlot, version int, unsupported []string, lang i18n.Lang) (json.RawMessage, error) {
+func (m *pageFitMemo) fitNativeFor(raw []byte, extID string, slot extension.UISlot, version int, unsupported []string, lang i18n.Lang) (json.RawMessage, error) {
 	if m != nil {
-		if f := m.last.Load(); f != nil && f.slot == slot && f.version == version && slices.Equal(f.unsupported, unsupported) && f.lang == lang && bytes.Equal(f.raw, raw) {
+		if f := m.last.Load(); f != nil && f.extID == extID && f.slot == slot && f.version == version && slices.Equal(f.unsupported, unsupported) && f.lang == lang && bytes.Equal(f.raw, raw) {
 			return f.fitted, nil
 		}
 	}
-	fitted, err := extension.FitNativeFor(raw, slot, version, unsupported, lang)
+	fitted, err := extension.FitNativeForExtension(raw, slot, version, extID, unsupported, lang)
 	if err == nil && m != nil {
-		m.last.Store(&pageFit{raw: bytes.Clone(raw), slot: slot, version: version, unsupported: slices.Clone(unsupported), lang: lang, fitted: fitted})
+		m.last.Store(&pageFit{raw: bytes.Clone(raw), extID: extID, slot: slot, version: version, unsupported: slices.Clone(unsupported), lang: lang, fitted: fitted})
 	}
 	return fitted, err
 }
@@ -71,7 +73,7 @@ func pageRenderInput(s *pageSession) pageRenderState {
 	} else if s.components != nil && !s.components[wire.ComponentMap] && !slices.Contains(unsupported, wire.ComponentMap) {
 		unsupported = append(unsupported, wire.ComponentMap)
 	}
-	return pageRenderState{id: s.id, epoch: s.epoch, native: s.native, manifest: s.manifest, item: s.item, components: s.components, unsupported: unsupported, slot: s.slot, params: params, tree: s.tree, fit: &s.fit}
+	return pageRenderState{id: s.id, epoch: s.epoch, extension: s.extension, native: s.native, manifest: s.manifest, item: s.item, components: s.components, unsupported: unsupported, slot: s.slot, params: params, tree: s.tree, fit: &s.fit}
 }
 
 // pagePrepare is pure bounded tree work, independent of session mutation and RPC.
@@ -89,7 +91,7 @@ func (h *Manager) pagePrepare(s pageRenderState, fence bool, request string) (*u
 			return nil, nil, err
 		}
 	}
-	fitted, err := s.fit.fitNativeFor(n.View, s.slot, s.params.UIVersion, s.unsupported, h.uiFallbackLang(context.Background(), s.params.Locale))
+	fitted, err := s.fit.fitNativeFor(n.View, s.extension, s.slot, s.params.UIVersion, s.unsupported, h.uiFallbackLang(context.Background(), s.params.Locale))
 	if err != nil {
 		return nil, nil, err
 	}

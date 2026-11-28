@@ -246,6 +246,13 @@ func (m *Manifest) Channels() []channel.Item {
 	return out
 }
 
+// TerminalSessions are the plugin's contributions to terminal_sessions (#16741).
+func (m *Manifest) TerminalSessions() []wire.TerminalSessionItem {
+	var out []wire.TerminalSessionItem
+	_ = json.Unmarshal(m.Contributes["terminal_sessions"], &out)
+	return out
+}
+
 // Contributions are the ids by extension point, the points this hub has only.
 func (m *Manifest) Contributions() map[string][]string {
 	out := map[string][]string{}

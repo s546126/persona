@@ -155,7 +155,7 @@ extension AppModel {
         case .knowledgeEntry(let kind, let id):
             guard hubLevel else { return nil }
             return .sheet(.knowledge(KBEntry(kind: kind, id: id, name: id, relevance: 0)))
-        case .machine(let id):
+        case .machine(let id), .machineTerminal(let id):
             return .sheet(.machine(MachineRef(group: group, id: id)))
         case .extensionPage(let ext, let ui, let state):
             return openExtension(ExtensionSystemLink(owner: ext, ui: ui, group: group, state: state)) ? .opened : nil

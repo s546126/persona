@@ -2505,6 +2505,8 @@ func (n *Node) handleMethod(ctx context.Context, method string, params json.RawM
 			return nil, err
 		}
 		return n.gitOp(ctx, dir, p.Op)
+	case "machines.exec": // owner-confirmed bounded command execution from an extension (#16741)
+		return n.machinesExec(ctx, params)
 	case methodWorktreePrepare: // "New worktree…": what the dialog starts from (worktree.go)
 		var in worktreePrepareParams
 		if err := json.Unmarshal(params, &in); err != nil {

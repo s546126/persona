@@ -20,6 +20,10 @@ const (
 	// pending link computer and read its connection status (machines.status). Granted by name only; newly added
 	// computers still wait for the owner's "This is my computer" confirmation.
 	ScopeMachinesPair = "machines.pair"
+	// ScopeMachinesExec lets an extension run a single bounded command on a confirmed, online computer (machines.exec)
+	// only after the owner explicitly approves a confirmation card for each invocation. Granted by name only, never
+	// covered by legacy all-scope tokens (#16741).
+	ScopeMachinesExec = "machines.exec"
 	// ScopeBrowserRun lets an extension list browser-enabled computers (browser.machines) and run scripts inside an
 	// extension-isolated task space (browser.run) via a pluggable BrowserBackend (e.g. ego lite, future CDP). Granted
 	// by name only (#12866).

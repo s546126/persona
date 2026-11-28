@@ -68,7 +68,11 @@ func build(p map[string]string) string {
 	case "machines":
 		path = Machines()
 	case "machine":
-		path = Machine(p["id"])
+		if p["subview"] == "terminal" {
+			path = MachineTerminal(p["id"])
+		} else {
+			path = Machine(p["id"])
+		}
 	case "settings":
 		path = Settings(p["tab"], p["item"])
 	case "extension":

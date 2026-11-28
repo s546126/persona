@@ -14,5 +14,15 @@
   "updating": "更新中…",
   "setup_title": "{name} を設定",
   "missing_settings": "必要な設定",
-  "open_settings": "拡張機能の設定を開く"
+  "open_settings": "拡張機能の設定を開く",
+  "confirm_open_terminal": "マシン「{machine}」のネイティブターミナルを開きますか？",
+  "confirm_open_ext_terminal": "拡張機能「{extension}」の対話型ターミナル「{target}」を開きますか？",
+  "terminal_connect": "接続",
+  "terminal_connecting": "接続中…",
+  "terminal_close": "セッションを閉じる",
+  "terminal_closed": "セッション終了",
+  "terminal_reconnect": "再接続",
+  "terminal_error": "エラー",
+  "terminal_full_device_only": "対話型ターミナルにはフルアクセスデバイスが必要です。",
+  "no_panes": "このマシンに開いているターミナルペインはありません。"
 }

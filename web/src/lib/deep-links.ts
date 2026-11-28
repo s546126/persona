@@ -25,7 +25,8 @@ export type DeepPage =
   | { page: "machines" }
   | ({ page: "machine"; id: string } & MachineLocation)
   | { page: "settings"; tab?: string; item?: string; manager?: string }
-  | { page: "extension"; extension: string; ui: string; state?: string };
+  | { page: "extension"; extension: string; ui: string; state?: string }
+  | { page: "ext-terminal"; extension: string; target: string };
 
 /** The knowledge base's kinds (lib/kb.ts KB_KINDS; a test keeps the two the same). */
 export const DEEP_KB_KINDS = ["projects", "topics", "chats", "people", "docs", "meetings", "events", "recordings"];
@@ -164,6 +165,7 @@ export function pageOfPath(path: string, search = ""): DeepPage | null {
     }
     case "extension":
     case "plugin":
+      if (p.length === 4 && p[2] === "terminal") return { page: "ext-terminal", extension: p[1]!, target: p[3]! };
       return p.length === 3 ? clean({ page: "extension", extension: p[1]!, ui: p[2]!, state: v("state") }) : null;
     default:
       if (!assistantPath(p[0]!)) return null;
@@ -223,6 +225,16 @@ export function appPage(u: URL): { page: DeepPage; hub?: string } | null {
     case "extension":
       if (parts.length === 2) page = clean({ page: "extension", extension: parts[0]!, ui: parts[1]!, state: u.searchParams.get("state") || undefined });
       break;
+    case "terminal":
+      if (parts.length === 1 && parts[0] !== "." && parts[0] !== ".." && !/[\s\\]/.test(parts[0]!)) {
+        page = { page: "machine", id: parts[0]!, subview: "terminal" };
+      }
+      break;
+    case "ext-terminal":
+      if (parts.length === 2 && parts.every((seg) => seg !== "." && seg !== ".." && !/[\s\\]/.test(seg))) {
+        page = { page: "ext-terminal", extension: parts[0]!, target: parts[1]! };
+      }
+      break;
   }
   return page ? (hub ? { page, hub } : { page }) : null;
 }
@@ -278,6 +290,8 @@ export function pagePath(p: DeepPage): string {
     }
     case "extension":
       return withQuery(`/extension/${enc(p.extension)}/${enc(p.ui)}`, [["state", p.state]]);
+    case "ext-terminal":
+      return `/extension/${enc(p.extension)}/terminal/${enc(p.target)}`;
   }
 }
 

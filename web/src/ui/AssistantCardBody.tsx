@@ -4,7 +4,7 @@
 // the cold first screen reduces first-screen bytes without adding anything to IDLE_TIER_BUDGET.
 import { lazy, Suspense, useContext, useMemo, useState } from "react";
 import { assistantView, cardText } from "../lib/assistant-view";
-import { blockKey, blockOf, cardKnown, checkCard } from "../lib/assistant-blocks";
+import { blockKey, blockOf, cardKnown, checkCard, openTarget, requiresOpenConfirmation } from "../lib/assistant-blocks";
 import { hasHtml, HTML_BRIDGE_FEATURE } from "../lib/assistant-html";
 import { conversationCards, draftKey, submitAction, updateDraft, useCards, type CardDraft } from "../lib/assistant-views";
 import type { AssistantView, ViewAction } from "../lib/extension-wire";
@@ -217,7 +217,12 @@ function CardBody({ raw, conversation, cardKey, version, source, htmlRuns }: { r
     if (!sem) return;
     if (sem.pop) return patch((d) => ({ ...d, stack: stack.slice(0, -1) }));
     if (sem.page) return stack.length < STACK_MOST && patch((d) => ({ ...d, stack: [...stack, sem.page!] }));
-    if (sem.open) return openTargetOf(sem.open, manager);
+    if (sem.open) {
+      if (sem.confirm || requiresOpenConfirmation(sem.open)) {
+        return setAsking({ action: a, sem, page, values: {}, version });
+      }
+      return openTargetOf(sem.open, manager);
+    }
     if (!sem.reply || !canReply) return;
     const sent = replyValues(view, values, a, sem, chosen);
     const bad = Object.entries(sent).find(([name]) => view.sections.some((s) => s.items.some((it) => it.type === "field" && it.name === name && it.kind === "number")) && numberProblem(sent[name]));
@@ -291,21 +296,29 @@ function CardBody({ raw, conversation, cardKey, version, source, htmlRuns }: { r
                   onClick={() => {
                     const x = asking;
                     setAsking(null);
+                    if (x.sem.open) {
+                      openTargetOf(x.sem.open, manager);
+                      return;
+                    }
                     void send(x, true);
                   }}
                 >
-                  <span className="truncate">{t("ui-assistantcard.send")}</span>
+                  <span className="truncate">{asking.sem.open ? t("settings-extensionview.ok") : t("ui-assistantcard.send")}</span>
                 </Button>
               </>
             }
           >
             <div className="flex flex-col gap-2 text-meta leading-relaxed break-words text-ink-2">
-              {draft.changed && <p className="text-orange">{t("ui-assistantcard.changed_confirm")}</p>}
-              {asking.sem.confirm && <p>{asking.sem.confirm}</p>}
-              <p className="text-label text-ink-3">{t("ui-assistantcard.will_send")}</p>
-              <p className="rounded-control bg-inset px-3 py-2 whitespace-pre-wrap text-ink shadow-hairline select-text">
-                {replyPreview(asking.sem.reply ?? "", view, asking.values)}
-              </p>
+              {!asking.sem.open && draft.changed && <p className="text-orange">{t("ui-assistantcard.changed_confirm")}</p>}
+              {asking.sem.confirm ? <p>{asking.sem.confirm}</p> : asking.sem.open ? <p>{confirmOpenText(asking.sem.open)}</p> : null}
+              {!asking.sem.open && (
+                <>
+                  <p className="text-label text-ink-3">{t("ui-assistantcard.will_send")}</p>
+                  <p className="rounded-control bg-inset px-3 py-2 whitespace-pre-wrap text-ink shadow-hairline select-text">
+                    {replyPreview(asking.sem.reply ?? "", view, asking.values)}
+                  </p>
+                </>
+              )}
             </div>
           </Dialog>
         )}
@@ -315,6 +328,13 @@ function CardBody({ raw, conversation, cardKey, version, source, htmlRuns }: { r
 }
 
 /** The message as the hub will write it (viewReplyMessage): the reply, then a line per value, by name. */
+function confirmOpenText(target: string): string {
+  const to = openTarget(target);
+  if (to?.kind === "terminal") return t("settings-extensionview.confirm_open_terminal", { machine: to.mid });
+  if (to?.kind === "ext-terminal") return t("settings-extensionview.confirm_open_ext_terminal", { extension: to.extension, target: to.target });
+  return target;
+}
+
 function replyPreview(reply: string, view: UIView, values: Record<string, string>): string {
   const names = Object.keys(values).sort();
   return [reply, ...names.map((k) => `${labelOf(view, k)}：${values[k]}`)].join("\n"); // i18n-ignore: the hub's own format

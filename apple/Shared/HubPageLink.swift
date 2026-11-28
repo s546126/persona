@@ -30,6 +30,8 @@ nonisolated enum HubPage: Equatable, Hashable, Sendable {
     case machines
     /// One computer (`/machines/<id>`).
     case machine(id: String)
+    /// One computer's native terminal subview (`/machines/<id>/terminal`).
+    case machineTerminal(id: String)
     /// Settings (`/settings`), at a tab (`?tab=`) and its item (the tab's own key) when the link names them.
     case settings(tab: String?, item: String?)
     /// A page an extension draws (`/extension/<extension>/<ui>`), in `state` when the link gives one.
@@ -88,6 +90,8 @@ nonisolated enum HubPageLink {
             found = .settings(tab: "extensions", item: parts[1])
         case "extension" where parts.count == 2:
             found = .extensionPage(extension: parts[0], ui: parts[1], state: value("state", in: query))
+        case "terminal" where parts.count == 1 && parts[0] != "." && parts[0] != "..":
+            found = .machineTerminal(id: parts[0])
         default:
             found = nil
         }
@@ -155,6 +159,8 @@ nonisolated enum HubPageLink {
             return .machines
         case "machines" where p.count == 2:
             return .machine(id: p[1])
+        case "machines" where p.count == 3 && p[2] == "terminal" && !p[1].isEmpty:
+            return .machineTerminal(id: p[1])
         case "settings" where p == ["settings", "sent"]:
             return .settings(tab: "connectors", item: sentSettings)
         case "settings" where p.count == 1:

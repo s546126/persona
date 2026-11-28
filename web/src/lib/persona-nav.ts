@@ -38,6 +38,8 @@ export function sidebarActiveKey(route: Route, main?: string, from?: string): st
       return r.mid && r.id ? `term:${r.mid}/${r.id}` : "terminal";
     case "extension":
       return extensionNavKey(r.extension, r.ui);
+    case "ext-terminal":
+      return `ext-term:${r.extension}/${r.target}`;
     default:
       return r.name;
   }

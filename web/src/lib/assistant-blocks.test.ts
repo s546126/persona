@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assistantBlocks, blockKey, blockOf, cardReply, checkCard, openTarget } from "./assistant-blocks";
+import { assistantBlocks, blockKey, blockOf, cardReply, checkCard, openTarget, requiresOpenConfirmation } from "./assistant-blocks";
 
 // The vectors every app and the hub are held to (sdk/go/wire/assistantblocks_test.go reads the same file).
 const FENCES = JSON.parse(
@@ -86,6 +86,11 @@ describe("open 目标（CheckAssistantOpen）", () => {
     expect(openTarget("persona://task/t1")).toEqual({ kind: "task", id: "t1" });
     expect(openTarget("persona://kb/people/a.md")).toEqual({ kind: "kb", path: ["people", "a.md"] });
     expect(openTarget("persona://file/m1/%2Ftmp%2Fa.txt")).toEqual({ kind: "file", mid: "m1", path: "/tmp/a.txt" });
+    expect(openTarget("persona://terminal/mac-studio-1")).toEqual({ kind: "terminal", mid: "mac-studio-1" });
+    expect(openTarget("persona://ext-terminal/ensemble/worker-1")).toEqual({ kind: "ext-terminal", extension: "ensemble", target: "worker-1" });
+    expect(requiresOpenConfirmation("persona://terminal/mac-studio-1")).toBe(true);
+    expect(requiresOpenConfirmation("persona://ext-terminal/ensemble/worker-1")).toBe(true);
+    expect(requiresOpenConfirmation("persona://session/m1/s1")).toBe(false);
   });
 
   it("refuses everything else", () => {
@@ -102,6 +107,17 @@ describe("open 目标（CheckAssistantOpen）", () => {
       "persona://task/a\u0000b",
       "https://example.com\\x",
       "file:///etc/passwd",
+      "persona://terminal/",
+      "persona://terminal/..",
+      "persona://terminal/a/b",
+      "persona://terminal/a%2Fb",
+      "persona://terminal/mac%201",
+      "persona://terminal/mac-1?x=1",
+      "persona://terminal/mac-1#frag",
+      "persona://ext-terminal/ensemble",
+      "persona://ext-terminal/BadUpper/shell-1",
+      "persona://ext-terminal/ensemble/..",
+      "persona://ext-terminal/ensemble/shell%201",
     ])
       expect(openTarget(bad), bad).toBeUndefined();
   });

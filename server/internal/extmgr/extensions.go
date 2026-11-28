@@ -817,6 +817,7 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 		// Wake after the replacement is published, so a catalog refresh sees the new contributions.
 		defer ps.h.widgetsWake(id, nil, true)
 		ps.h.pageDropExtension(id)
+		ps.h.extTerminalDropExtension(id)
 		// Switched off, upgraded (maybe to fewer scopes), uninstalled or reconfigured: its token goes now, and a new
 		// one comes with its next start.
 		ps.h.extTokens.revoke(id, why)
@@ -1274,6 +1275,8 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			return ps.extensionAssistantCall(ctx, id, method, params)
 		case "machines.pair_link", "machines.status": // machines.pair / machines.read (extension_machines.go)
 			return ps.extensionMachinesCall(ctx, id, method, params)
+		case "machines.exec": // machines.exec with owner approval card (extension_machines_exec.go)
+			return ps.extensionMachinesExecCall(ctx, id, params)
 		case "browser.machines", "browser.run": // browser.run (extension_browser.go)
 			return ps.extensionBrowserCall(ctx, id, method, params)
 		case assistantwire.MethodAssistantEvent: // assistant.events (extension_assistant_event.go)
@@ -1332,6 +1335,14 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		}
 		if event == "ui.page.snapshot" && ps.h != nil && hp.proc != nil {
 			ps.h.pageSnapshot(id, hp.proc, params)
+			return
+		}
+		if event == "terminal.frame" && ps.h != nil {
+			ps.h.extTerminalFrame(id, params)
+			return
+		}
+		if event == "terminal.closed" && ps.h != nil {
+			ps.h.extTerminalClosed(id, params)
 			return
 		}
 		if event == "api.broadcast" {

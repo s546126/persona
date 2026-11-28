@@ -14,5 +14,15 @@
   "updating": "Updating…",
   "setup_title": "Set up {name}",
   "missing_settings": "Required settings",
-  "open_settings": "Open extension settings"
+  "open_settings": "Open extension settings",
+  "confirm_open_terminal": "Open native terminal on machine “{machine}”?",
+  "confirm_open_ext_terminal": "Open interactive terminal “{target}” provided by extension “{extension}”?",
+  "terminal_connect": "Connect",
+  "terminal_connecting": "Connecting…",
+  "terminal_close": "Close session",
+  "terminal_closed": "Session closed",
+  "terminal_reconnect": "Reconnect",
+  "terminal_error": "Error",
+  "terminal_full_device_only": "Interactive terminal requires a full-access device.",
+  "no_panes": "No open terminal panes on this machine."
 }

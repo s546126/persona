@@ -228,6 +228,9 @@ const (
 	// StartOpID: session.start and session.start.work record op_id on the started session (persisted via state.put)
 	// and answer start.status for reconnect reconciliation of held Agent starts (#10674).
 	StartOpID = "start_op_id_v1"
+	// MachinesExec: machines.exec, executing one owner-confirmed bounded command on this computer (#16741).
+	// Without it the hub answers node_outdated rather than falling back to a shell pane.
+	MachinesExec = "machines_exec"
 )
 
 // ResumeWindowSeconds is how long the manager tries to resume a dropped connection that can resume, from when it
@@ -344,7 +347,7 @@ type TaskWorkspaceCapabilities struct {
 const MarkdownCloseout = "closeout.markdown.v1"
 
 // Announced is what a node built from this code announces.
-var Announced = []string{MarkdownCloseout, TaskWorkspace, ScratchWorkspace, TaskInstructions, SourcePermissions, OwnerControls, SessionSkills, ShareProjection, CreationReceipt, PersonaContracts, ManagerUpdateInventory, MCPWait, Sessions, SessionEchoStatus, ModelConfiguration, AssistantConfigDir, AssistantSupervisionInstructions, AssistantServiceTier, SessionStartSpeed, SessionStartServiceTier, TaskExecution, TaskInput, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall, Ultracode, HealthSpaces, Preview, SecretRun, SecretRunEnv, Clipboard, SecretEnv, LauncherSwitch, ModelHTTP, EngineSwitch, ModelRun, LauncherSwitchNow, LauncherSwitchIdle, PaneCwd, NodeUpdateIdle, NodeUpdateDrain, PaneNewSpace, MachineDiagnose, MachineStorageUsage, StartGoal, StartContinue, LauncherCheckAssistantTurn, StartAnswer, AssistantToolSearchFallback, AgentDirsBlocked, HerdrSessionsBlocked, NodeLanes, ResumeOutsideHealth, DenyDirs, StartOpID}
+var Announced = []string{MarkdownCloseout, TaskWorkspace, ScratchWorkspace, TaskInstructions, SourcePermissions, OwnerControls, SessionSkills, ShareProjection, CreationReceipt, PersonaContracts, ManagerUpdateInventory, MCPWait, Sessions, SessionEchoStatus, ModelConfiguration, AssistantConfigDir, AssistantSupervisionInstructions, AssistantServiceTier, SessionStartSpeed, SessionStartServiceTier, TaskExecution, TaskInput, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall, Ultracode, HealthSpaces, Preview, SecretRun, SecretRunEnv, Clipboard, SecretEnv, LauncherSwitch, ModelHTTP, EngineSwitch, ModelRun, LauncherSwitchNow, LauncherSwitchIdle, PaneCwd, NodeUpdateIdle, NodeUpdateDrain, PaneNewSpace, MachineDiagnose, MachineStorageUsage, StartGoal, StartContinue, LauncherCheckAssistantTurn, StartAnswer, AssistantToolSearchFallback, AgentDirsBlocked, HerdrSessionsBlocked, NodeLanes, ResumeOutsideHealth, DenyDirs, StartOpID, MachinesExec}
 
 // ShareProjection is the bounded complete-source sharing projection, not light Items.
 const ShareProjection = "share_projection.v1"

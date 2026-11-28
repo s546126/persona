@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "terminal.schema.json",
+  "title": "Extension interactive PTY terminal sessions",
+  "description": "Interactive PTY terminal sessions provided by an extension (contributes.terminal_sessions, #16741). Strictly isolated from real computer machine_id / herdr panes: only full devices may open or send input after explicit owner confirmation. Plugin-side: only the manager and the extension program speak it.",
+  "x-side": "plugin",
+  "x-methods": {
+    "terminal.open": {"from": "hub", "params": "TerminalOpenParams", "result": "TerminalOpenResult"},
+    "terminal.input": {"from": "hub", "params": "TerminalInputParams", "result": "Empty"},
+    "terminal.resize": {"from": "hub", "params": "TerminalResizeParams", "result": "Empty"},
+    "terminal.close": {"from": "hub", "params": "TerminalCloseParams", "result": "Empty"}
+  },
+  "x-events": {
+    "terminal.frame": {"from": "program", "params": "TerminalFrameEvent"},
+    "terminal.closed": {"from": "program", "params": "TerminalClosedEvent"}
+  },
+  "$defs": {
+    "TerminalOpenParams": {
+      "description": "terminal.open: open an interactive PTY session for target at cols x rows.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Manager-assigned opaque PTY session id."},
+        "target": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Extension-defined terminal target identifier."},
+        "cols": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Initial terminal width in columns."},
+        "rows": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Initial terminal height in rows."}
+      },
+      "required": ["session_id", "target", "cols", "rows"]
+    },
+    "TerminalOpenResult": {
+      "description": "terminal.open's answer: confirms the opened PTY session and optional display title.",
+      "type": "object",
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "title": {"type": "string", "maxLength": 200}
+      },
+      "required": ["session_id"]
+    },
+    "TerminalInputParams": {
+      "description": "terminal.input: raw terminal input bytes (base64-encoded, at most 64 KiB decoded) typed by the user.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "data_b64": {"type": "string", "maxLength": 87384, "description": "Base64-encoded raw bytes to write to the PTY master."}
+      },
+      "required": ["session_id", "data_b64"]
+    },
+    "TerminalResizeParams": {
+      "description": "terminal.resize: update the PTY window size.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "cols": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "rows": {"type": "integer", "minimum": 1, "maximum": 1000}
+      },
+      "required": ["session_id", "cols", "rows"]
+    },
+    "TerminalCloseParams": {
+      "description": "terminal.close: close the PTY session (user closed, last subscriber disconnected, or idle timeout).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "reason": {"type": "string", "maxLength": 200}
+      },
+      "required": ["session_id"]
+    },
+    "TerminalFrameEvent": {
+      "description": "terminal.frame (program -> hub): one ordered chunk of PTY output bytes (base64-encoded, at most 64 KiB decoded).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "seq": {"type": "integer", "minimum": 1},
+        "data_b64": {"type": "string", "maxLength": 87384}
+      },
+      "required": ["session_id", "seq", "data_b64"]
+    },
+    "TerminalClosedEvent": {
+      "description": "terminal.closed (program -> hub): the PTY session exited or closed.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "exit_code": {"type": "integer", "x-go-pointer": true},
+        "reason": {"type": "string", "maxLength": 200}
+      },
+      "required": ["session_id"]
+    }
+  }
+}

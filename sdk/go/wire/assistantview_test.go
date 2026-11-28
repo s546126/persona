@@ -310,7 +310,7 @@ func TestStripAssistantFieldsCoversAllActionSlots(t *testing.T) {
 				t.Fatalf("stripped view failed CheckView: %v", err)
 			}
 			for _, a := range Actions(&v) {
-				if assistantOnlyAction(a, tc.keepPageNavigation) {
+				if assistantOnlyAction(a, tc.keepPageNavigation, "") {
 					t.Errorf("assistant-only action survived stripping: %#v", a)
 				}
 			}

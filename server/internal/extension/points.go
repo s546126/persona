@@ -929,6 +929,26 @@ var Points = map[string]Point{
 		}
 		return c.ID, nil
 	}},
+	// terminal_sessions: interactive PTY terminal sessions hosted by an extension (terminal.schema.json, #16741).
+	"terminal_sessions": {Name: "terminal_sessions", Namespace: "terminal", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+		var item wire.TerminalSessionItem
+		if err := strict(raw, &item); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(item.ID) {
+			return item.ID, fmt.Errorf("terminal_sessions id %q: a-z0-9_-", item.ID)
+		}
+		if item.Title != "" && utf8.RuneCountInString(strings.TrimSpace(item.Title)) > 80 {
+			return item.ID, fmt.Errorf("terminal_sessions %s: title longer than 80 characters", item.ID)
+		}
+		if item.Description != "" && utf8.RuneCountInString(item.Description) > 200 {
+			return item.ID, fmt.Errorf("terminal_sessions %s: description longer than 200 characters", item.ID)
+		}
+		if item.MaxSessions < 0 || item.MaxSessions > 4 {
+			return item.ID, fmt.Errorf("terminal_sessions %s: max_sessions must be between 1 and 4", item.ID)
+		}
+		return item.ID, nil
+	}},
 }
 
 // PointVersions are Points' versions, as initialize tells a program.

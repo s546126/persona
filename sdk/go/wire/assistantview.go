@@ -260,6 +260,14 @@ func parseAssistantOpen(target string) (*url.URL, error) {
 		if len(parts) == 1 {
 			return u, nil
 		}
+	case "terminal":
+		if len(parts) == 1 && validTerminalSegment(decoded[0]) {
+			return u, nil
+		}
+	case "ext-terminal":
+		if len(parts) == 2 && validExtensionIDSegment(decoded[0]) && validTerminalSegment(decoded[1]) {
+			return u, nil
+		}
 	case "kb":
 		return u, nil
 	case "file":
@@ -270,34 +278,92 @@ func parseAssistantOpen(target string) (*url.URL, error) {
 	return nil, errors.New("open: the target has the wrong kind or number of path segments")
 }
 
+func validTerminalSegment(s string) bool {
+	if len(s) == 0 || len(s) > 128 || s == "." || s == ".." {
+		return false
+	}
+	for _, r := range s {
+		if unicode.IsControl(r) || unicode.IsSpace(r) || r == '/' || r == '\\' || r == '?' || r == '#' {
+			return false
+		}
+	}
+	return true
+}
+
+func validExtensionIDSegment(s string) bool {
+	if len(s) == 0 || len(s) > 32 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		alnum := (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+		if i == 0 {
+			if !alnum {
+				return false
+			}
+			continue
+		}
+		if !alnum && c != '_' && c != '-' {
+			return false
+		}
+	}
+	return true
+}
+
 func CheckAssistantOpen(target string) error {
 	_, err := parseAssistantOpen(target)
 	return err
 }
 
-// CheckExtensionOpen accepts the two internal destinations a full extension page may open: a Persona session
-// (persona://session/<machine>/<session>) and a to-do (persona://task/<id>). It applies the same structural checks as
-// CheckAssistantOpen; every other kind stays assistant-only.
+// CheckExtensionOpen accepts the internal destinations a full extension page may open: a Persona session
+// (persona://session/<machine>/<session>), a to-do (persona://task/<id>), a confirmed computer native terminal
+// (persona://terminal/<machine_id>), and an extension interactive PTY terminal
+// (persona://ext-terminal/<ext_id>/<target_id>). It applies the same structural checks as CheckAssistantOpen;
+// every other kind stays assistant-only.
 func CheckExtensionOpen(target string) error {
+	return CheckExtensionOpenFor(target, "")
+}
+
+// CheckExtensionOpenFor is CheckExtensionOpen bound to the owning extension ID: when extID is non-empty,
+// persona://ext-terminal/<ext_id>/<target_id> must match extID to prevent cross-extension spoofing.
+func CheckExtensionOpenFor(target, extID string) error {
 	u, err := parseAssistantOpen(target)
 	if err != nil {
 		return err
 	}
 	if !assistantURLScheme(u.Scheme) {
-		return errors.New("open: an extension page may open only a persona session or task")
+		return errors.New("open: an extension page may open only a persona session, task, terminal or ext-terminal")
 	}
 	switch u.Host {
-	case "session", "task":
+	case "session", "task", "terminal":
+		return nil
+	case "ext-terminal":
+		if extID != "" {
+			rawPath := ""
+			if rest, ok := strings.CutPrefix(target[len(u.Scheme):], "://"); ok {
+				if slash := strings.IndexByte(rest, '/'); slash >= 0 {
+					rawPath = rest[slash:]
+				}
+			}
+			parts := strings.Split(strings.TrimPrefix(rawPath, "/"), "/")
+			if len(parts) != 2 {
+				return errors.New("open: invalid ext-terminal target")
+			}
+			gotExt, err := url.PathUnescape(parts[0])
+			if err != nil || gotExt != extID {
+				return errors.New("open: ext-terminal target must match the current extension")
+			}
+		}
 		return nil
 	}
-	return errors.New("open: an extension page may open only a persona session or task")
+	return errors.New("open: an extension page may open only a persona session, task, terminal or ext-terminal")
 }
 
 func AssistantOnlyAction(a *Action) bool {
-	return assistantOnlyAction(a, false)
+	return assistantOnlyAction(a, false, "")
 }
 
-func assistantOnlyAction(a *Action, keepPageNavigation bool) bool {
+func assistantOnlyAction(a *Action, keepPageNavigation bool, extID string) bool {
 	if a == nil {
 		return false
 	}
@@ -307,18 +373,24 @@ func assistantOnlyAction(a *Action, keepPageNavigation bool) bool {
 	if a.Open == "" {
 		return false
 	}
-	// A full extension page may navigate to the two internal destinations below (review of #14617): its own
-	// rendering stays declarative, and a tap only routes. Every other assistant-only open target stays stripped.
-	return !(keepPageNavigation && CheckExtensionOpen(a.Open) == nil)
+	// A full extension page may navigate to the validated internal destinations below: its own rendering stays
+	// declarative, and a tap only routes (with mandatory owner confirmation for terminal targets).
+	return !(keepPageNavigation && CheckExtensionOpenFor(a.Open, extID) == nil)
 }
 
-func StripAssistantFields(v *View) []string { return stripAssistantFields(v, false) }
+func StripAssistantFields(v *View) []string { return stripAssistantFields(v, false, "") }
 
 // StripAssistantFieldsForPage is StripAssistantFields for a full extension page (extension_page/plugin_page and
-// nav_page): it keeps an action whose only assistant-only field is an open of a persona session or to-do.
-func StripAssistantFieldsForPage(v *View) []string { return stripAssistantFields(v, true) }
+// nav_page): it keeps an action whose only assistant-only field is a valid extension open target.
+func StripAssistantFieldsForPage(v *View) []string { return stripAssistantFields(v, true, "") }
 
-func stripAssistantFields(v *View, keepPageNavigation bool) []string {
+// StripAssistantFieldsForExtensionPage is StripAssistantFieldsForPage bound to extID so persona://ext-terminal
+// targets pointing to another extension are stripped.
+func StripAssistantFieldsForExtensionPage(v *View, extID string) []string {
+	return stripAssistantFields(v, true, extID)
+}
+
+func stripAssistantFields(v *View, keepPageNavigation bool, extID string) []string {
 	var dropped []string
 	drop := func(name string) {
 		for _, old := range dropped {
@@ -339,11 +411,11 @@ func stripAssistantFields(v *View, keepPageNavigation bool) []string {
 		drop("pages")
 		v.Pages = nil
 	}
-	if v.Search != nil && assistantOnlyAction(&v.Search.Action, keepPageNavigation) {
+	if v.Search != nil && assistantOnlyAction(&v.Search.Action, keepPageNavigation, extID) {
 		drop("assistant_action")
 		v.Search = nil
 	}
-	if v.Filter != nil && assistantOnlyAction(&v.Filter.Action, keepPageNavigation) {
+	if v.Filter != nil && assistantOnlyAction(&v.Filter.Action, keepPageNavigation, extID) {
 		drop("assistant_action")
 		v.Filter = nil
 	}
@@ -351,7 +423,7 @@ func stripAssistantFields(v *View, keepPageNavigation bool) []string {
 		var out []RowAction
 		changed := false
 		for i := range in {
-			if assistantOnlyAction(&in[i].Action, keepPageNavigation) {
+			if assistantOnlyAction(&in[i].Action, keepPageNavigation, extID) {
 				drop("assistant_action")
 				if !changed {
 					out = append([]RowAction(nil), in[:i]...)
@@ -372,7 +444,7 @@ func stripAssistantFields(v *View, keepPageNavigation bool) []string {
 		var out []ComposerButton
 		changed := false
 		for i := range in {
-			if assistantOnlyAction(&in[i].Action, keepPageNavigation) {
+			if assistantOnlyAction(&in[i].Action, keepPageNavigation, extID) {
 				drop("assistant_action")
 				if !changed {
 					out = append([]ComposerButton(nil), in[:i]...)
@@ -389,7 +461,7 @@ func stripAssistantFields(v *View, keepPageNavigation bool) []string {
 		}
 		return out, true
 	}
-	if v.Tabs != nil && assistantOnlyAction(&v.Tabs.Action, keepPageNavigation) {
+	if v.Tabs != nil && assistantOnlyAction(&v.Tabs.Action, keepPageNavigation, extID) {
 		drop("assistant_action")
 		v.Tabs = nil
 	}
@@ -401,7 +473,7 @@ func stripAssistantFields(v *View, keepPageNavigation bool) []string {
 				v.Review.Buttons = kept
 			}
 		}
-		if v.Review != nil && assistantOnlyAction(v.Review.Discard, keepPageNavigation) {
+		if v.Review != nil && assistantOnlyAction(v.Review.Discard, keepPageNavigation, extID) {
 			drop("assistant_action")
 			v.Review.Discard = nil
 		}
@@ -410,11 +482,11 @@ func stripAssistantFields(v *View, keepPageNavigation bool) []string {
 	for i := range v.Sections {
 		s := &v.Sections[i]
 		hadItems := len(s.Items) > 0
-		if s.More != nil && assistantOnlyAction(&s.More.Action, keepPageNavigation) {
+		if s.More != nil && assistantOnlyAction(&s.More.Action, keepPageNavigation, extID) {
 			drop("assistant_action")
 			s.More = nil
 		}
-		if s.Link != nil && assistantOnlyAction(&s.Link.Action, keepPageNavigation) {
+		if s.Link != nil && assistantOnlyAction(&s.Link.Action, keepPageNavigation, extID) {
 			drop("assistant_action")
 			s.Link = nil
 		}
@@ -424,14 +496,14 @@ func stripAssistantFields(v *View, keepPageNavigation bool) []string {
 				drop("html")
 				continue
 			}
-			if assistantOnlyAction(e.Action, keepPageNavigation) {
+			if assistantOnlyAction(e.Action, keepPageNavigation, extID) {
 				drop("assistant_action")
 				if e.Type == "button" || e.Type == "segmented" {
 					continue
 				}
 				e.Action = nil
 			}
-			if e.Button != nil && assistantOnlyAction(&e.Button.Action, keepPageNavigation) {
+			if e.Button != nil && assistantOnlyAction(&e.Button.Action, keepPageNavigation, extID) {
 				drop("assistant_action")
 				e.Button = nil
 			}
@@ -442,29 +514,29 @@ func stripAssistantFields(v *View, keepPageNavigation bool) []string {
 				e.Buttons = kept
 			}
 			for _, ap := range []**Action{&e.Expand, &e.Load, &e.Comment, &e.Reply, &e.Context, &e.MarkViewed, &e.Draft, &e.Navigate} {
-				if assistantOnlyAction(*ap, keepPageNavigation) {
+				if assistantOnlyAction(*ap, keepPageNavigation, extID) {
 					drop("assistant_action")
 					*ap = nil
 				}
 			}
-			if e.Control != nil && assistantOnlyAction(&e.Control.Action, keepPageNavigation) {
+			if e.Control != nil && assistantOnlyAction(&e.Control.Action, keepPageNavigation, extID) {
 				drop("assistant_action")
 				e.Control = nil
 			}
 			e.Actions = filterRowActions(e.Actions)
 			for k := range e.Crumbs {
-				if assistantOnlyAction(e.Crumbs[k].Action, keepPageNavigation) {
+				if assistantOnlyAction(e.Crumbs[k].Action, keepPageNavigation, extID) {
 					drop("assistant_action")
 					e.Crumbs[k].Action = nil
 				}
 			}
 			for k := range e.Tiles {
 				t := &e.Tiles[k]
-				if assistantOnlyAction(t.Action, keepPageNavigation) {
+				if assistantOnlyAction(t.Action, keepPageNavigation, extID) {
 					drop("assistant_action")
 					t.Action = nil
 				}
-				if t.Control != nil && assistantOnlyAction(&t.Control.Action, keepPageNavigation) {
+				if t.Control != nil && assistantOnlyAction(&t.Control.Action, keepPageNavigation, extID) {
 					drop("assistant_action")
 					t.Control = nil
 				}
@@ -472,31 +544,31 @@ func stripAssistantFields(v *View, keepPageNavigation bool) []string {
 			}
 			// a graph's nodes keep their place; only their assistant-only action goes
 			for k := range e.Nodes {
-				if assistantOnlyAction(e.Nodes[k].Action, keepPageNavigation) {
+				if assistantOnlyAction(e.Nodes[k].Action, keepPageNavigation, extID) {
 					drop("assistant_action")
 					e.Nodes[k].Action = nil
 				}
 			}
 			// and so do a scene's pins
 			for k := range e.Pins {
-				if assistantOnlyAction(e.Pins[k].Action, keepPageNavigation) {
+				if assistantOnlyAction(e.Pins[k].Action, keepPageNavigation, extID) {
 					drop("assistant_action")
 					e.Pins[k].Action = nil
 				}
 			}
 			// and a map's markers
 			for k := range e.Markers {
-				if assistantOnlyAction(e.Markers[k].Action, keepPageNavigation) {
+				if assistantOnlyAction(e.Markers[k].Action, keepPageNavigation, extID) {
 					drop("assistant_action")
 					e.Markers[k].Action = nil
 				}
 			}
 			for k := range e.Threads {
-				if assistantOnlyAction(e.Threads[k].Reply, keepPageNavigation) {
+				if assistantOnlyAction(e.Threads[k].Reply, keepPageNavigation, extID) {
 					drop("assistant_action")
 					e.Threads[k].Reply = nil
 				}
-				if assistantOnlyAction(e.Threads[k].Resolve, keepPageNavigation) {
+				if assistantOnlyAction(e.Threads[k].Resolve, keepPageNavigation, extID) {
 					drop("assistant_action")
 					e.Threads[k].Resolve = nil
 				}

@@ -141,6 +141,17 @@ struct InteractiveAssistantViewCard: View {
             app.selectHub(location.scope.group)
             let id = parts.dropFirst().joined(separator: "/")
             openedKnowledge = KBEntry(kind: parts[0], id: id, name: id, relevance: 0)
+        case "terminal" where parts.count == 1:
+            _ = app.openHubPage(.machineTerminal(id: parts[0]), group: location.scope.group)
+        case "ext-terminal" where parts.count == 2:
+            if let base = app.hubAddresses(location.scope.group).first,
+               let ext = parts[0].addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+               let target = parts[1].addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+               let webURL = URL(string: "\(base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")))/extension/\(ext)/terminal/\(target)") {
+                openedWeb = LinkTarget(url: webURL)
+            } else {
+                app.toast = Toast(String(localized: "Can't open this card target"), style: .error)
+            }
         default: app.toast = Toast(String(localized: "Can't open this card target"), style: .error)
         }
     }

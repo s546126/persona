@@ -72,6 +72,7 @@
   "scope_agents_permission_mode": "更改它自己开的对话的权限模式",
   "scope_machines_read": "看你的各台电脑（在不在线、负载）",
   "scope_machines_pair": "配对新电脑（仍需你确认后生效）",
+  "scope_machines_exec": "在你的电脑上执行命令（每次都需要你确认）",
   "scope_browser_run": "在已配对电脑的浏览器隔离空间里执行脚本",
   "scope_notify": "给你的设备发通知",
   "scope_push_grading": "管理自己的推送分级配置层，并预演分级结果",

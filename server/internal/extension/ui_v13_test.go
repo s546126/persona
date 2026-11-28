@@ -35,7 +35,7 @@ func TestNavigateIsLeftOutBelow13(t *testing.T) {
 		}
 	}
 	v = navigateView()
-	if _, err := fit(v, page, 13, nil, true); err != nil {
+	if _, err := fit(v, page, 13, "", nil, true); err != nil {
 		t.Fatal(err)
 	}
 	if items(v)[0].Navigate != nil {

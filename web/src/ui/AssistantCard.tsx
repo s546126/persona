@@ -71,6 +71,12 @@ export function openTargetOf(target: string, manager?: string) {
     case "file":
       openPanel({ kind: "file", mid: to.mid, path: to.path });
       return;
+    case "terminal":
+      navigate({ name: "machine", mid: to.mid, subview: "terminal" });
+      return;
+    case "ext-terminal":
+      navigate({ name: "ext-terminal", extension: to.extension, target: to.target });
+      return;
     default:
       toast(t("ui-assistantcard.cannot_open"), "error");
   }

@@ -29,7 +29,7 @@ func fitNativeOracle(raw []byte, slot UISlot, version int, lang i18n.Lang) (json
 	if err != nil {
 		return nil, err
 	}
-	if _, err = fit(&view, slot, version, nil, true, lang); err != nil {
+	if _, err = fit(&view, slot, version, "", nil, true, lang); err != nil {
 		return nil, err
 	}
 	after, err := json.Marshal(view)

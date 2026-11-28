@@ -10,6 +10,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExt
 import { ApiError, credentialOwner, errorText, getToken, onCredentialChange } from "../../lib/api";
 import { extIdOf } from "../../lib/extension-api";
 import { openLink } from "../../lib/links";
+import { openTarget, requiresOpenConfirmation } from "../../lib/assistant-card-actions";
 import { openTargetOf } from "../../ui/AssistantCard";
 import {
   actUI, fieldValues, httpOnlyUI, isUnsupported, numberProblem, outcome, pushPage, refreshDelay, renderUI, submitValues, uiPlaces, UI_VERSION,
@@ -665,6 +666,11 @@ export function LegacyExtensionUI({
     // A full page may open an existing Persona session or to-do (#14617): route locally, like an assistant card.
     // The hub only keeps session and task targets on extension pages; other forms still go through ui.action.
     if (action.open) {
+      const to = openTarget(action.open);
+      if (to?.kind === "ext-terminal" && to.extension !== extension) {
+        toast(t("ui-assistantcard.cannot_open"), "error");
+        return false;
+      }
       openTargetOf(action.open, linkManager);
       return true;
     }
@@ -801,10 +807,19 @@ export function LegacyExtensionUI({
     if (on) on.queued = { c, value };
     else void sendControl(c, value);
   };
+  const confirmTextFor = (action: UIAction): string => {
+    if (action.confirm?.trim()) return action.confirm;
+    if (action.open) {
+      const to = openTarget(action.open);
+      if (to?.kind === "terminal") return t("settings-extensionview.confirm_open_terminal", { machine: to.mid });
+      if (to?.kind === "ext-terminal") return t("settings-extensionview.confirm_open_ext_terminal", { extension: to.extension, target: to.target });
+    }
+    return "";
+  };
   const changeControl = (c: UIRowControl, value: string) => {
     if (c.disabled) return;
     // asked first when the action says so; cancelled, nothing changed
-    if (c.action.confirm?.trim()) setConfirming({ action: c.action, destructive: false, control: { c, value } });
+    if (confirmTextFor(c.action)) setConfirming({ action: c.action, destructive: false, control: { c, value } });
     else applyControl(c, value);
   };
   // a hub picture that does not load may have outlived its token (15 minutes): the page is drawn again, which signs
@@ -819,7 +834,7 @@ export function LegacyExtensionUI({
   const isReview = !compact && !embedded && reviewing(view);
   const press = (action: UIAction, destructive = false) => {
     if (busy) return;
-    if (action.confirm?.trim()) setConfirming({ action, destructive });
+    if (action.confirm?.trim() || requiresOpenConfirmation(action.open)) setConfirming({ action, destructive });
     else void run(action);
   };
   // a code hosting component's action (UI version 4): with its own values (a path, a line, a comment), confirmed first
@@ -827,7 +842,7 @@ export function LegacyExtensionUI({
   // box clears what was typed only once the extension has taken it.
   const act = (action: UIAction, extra?: Record<string, string>): Promise<boolean> => {
     if (busy) return Promise.resolve(false);
-    if (action.confirm?.trim()) return new Promise((done) => setConfirming({ action, destructive: false, values: extra, done }));
+    if (action.confirm?.trim() || requiresOpenConfirmation(action.open)) return new Promise((done) => setConfirming({ action, destructive: false, values: extra, done }));
     return run(action, extra);
   };
   const cancelConfirm = () => {
@@ -1014,7 +1029,7 @@ export function LegacyExtensionUI({
             </>
           }
         >
-          <p className="text-meta leading-relaxed whitespace-pre-line break-words text-ink-2">{confirming.action.confirm}</p>
+          <p className="text-meta leading-relaxed whitespace-pre-line break-words text-ink-2">{confirmTextFor(confirming.action)}</p>
         </Dialog>
       )}
     </div>

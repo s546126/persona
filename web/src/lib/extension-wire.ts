@@ -372,6 +372,7 @@ export interface Contributes {
   text_lookup?: TextLookupItem[];
   memory_sources?: MemorySourceItem[];
   disk_offload?: DiskOffloadItem[];
+  terminal_sessions?: TerminalSessionItem[];
   messaging?: MessagingItem[];
   /** Extra keys are opaque JSON; declared properties keep their own types. */
   [key: string]: unknown;
@@ -659,6 +660,20 @@ export interface DiskOffloadItem {
  */
 export type DiskOffloadKind = "file" | "dir" | "app" | (string & {});
 export const DISK_OFFLOAD_KINDS = ["file", "dir", "app"] as const;
+
+/**
+ * An interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize, terminal.close;
+ * terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer machines/herdr panes;
+ * only full devices may open or type after explicit owner confirmation.
+ */
+export interface TerminalSessionItem {
+  id: string;
+  /** Display label for the terminal provider. */
+  title?: string;
+  description?: string;
+  /** Optional concurrent session cap (default and hard limit 4 per extension). */
+  max_sessions?: number;
+}
 
 /**
  * The extension's memory, read by the manager one entry at a time (memory.entries; memory.schema.json) so the hub
@@ -3062,8 +3077,9 @@ export interface Action {
    */
   reply?: string;
   /**
-   * Assistant only, except that a full extension page may open persona://session/<machine>/<session> or
-   * persona://task/<id>: an https URL or a validated persona session, task, kb or file target, opened inside the app.
+   * Assistant only, except that a full extension page may open persona://session/<machine>/<session>,
+   * persona://task/<id>, persona://terminal/<machine_id>, or persona://ext-terminal/<ext_id>/<target_id>: an https
+   * URL or a validated persona session, task, terminal, ext-terminal, kb or file target, opened inside the app.
    */
   open?: string;
   /** Assistant only: return one page within the card. */

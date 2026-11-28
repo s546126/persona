@@ -72,6 +72,7 @@
   "scope_agents_permission_mode": "自分で始めた会話の権限モードを変更",
   "scope_machines_read": "コンピューターの接続状態と負荷を表示",
   "scope_machines_pair": "新しいコンピューターのペアリングリンクを作成（確認後に有効）",
+  "scope_machines_exec": "コンピューターでコマンドを実行（毎回あなたの確認が必要）",
   "scope_browser_run": "ペアリング済みコンピューターのブラウザー隔離空間でスクリプトを実行",
   "scope_notify": "デバイスに通知を送信",
   "scope_push_grading": "自身の通知グレーディングレイヤーを管理し、判定をプレビュー",

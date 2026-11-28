@@ -10,7 +10,7 @@
 import { isObject, openTarget } from "./assistant-card-actions";
 import { KNOWN_ITEMS } from "./extension-ui";
 
-export { cardReply, openTarget, type CardReply, type OpenTarget } from "./assistant-card-actions";
+export { cardReply, openTarget, requiresOpenConfirmation, type CardReply, type OpenTarget } from "./assistant-card-actions";
 
 export interface AssistantBlock {
   /** The n-th persona-view block of the text, from 0; -1 for a persona-card block (not numbered). */

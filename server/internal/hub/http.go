@@ -1452,12 +1452,14 @@ type client struct {
 	// desktop: a desktop app (the Mac app, register_desktop); never the phone (desktops.go).
 	desktop bool
 	// device and role: whose credential opened the connection (devicetokens.go); device is empty for the pairing token.
-	device, role string
-	scopes       []string
-	expiresAt    time.Time
-	uiConnection string // hub-owned identity for targeted extension page transport
-	uiRequests   chan struct{}
-	uiManagers   map[string]bool
+	device, role    string
+	scopes          []string
+	expiresAt       time.Time
+	uiConnection    string // hub-owned identity for targeted extension page transport
+	uiRequests      chan struct{}
+	uiManagers      map[string]bool
+	extTermRequests chan struct{}
+	extTermManagers map[string]bool
 	// pushDevice: the app's id for pushes (register_phone's / register_desktop's device_id, PushRegistrar.deviceID in
 	// the app): while it is connected its app is open, and a phone draws its Live Activity itself (liveactivity.go), a
 	// desktop posts its own notifications (desktopOpen). Empty for an older app.
@@ -1732,6 +1734,8 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	c.uiConnection = randomHex(24)
 	c.uiRequests = make(chan struct{}, 8)
 	c.uiManagers = map[string]bool{}
+	c.extTermRequests = make(chan struct{}, 16)
+	c.extTermManagers = map[string]bool{}
 	if c.listMode {
 		h.sessionListIndex() // before registration: never seed the index under h.mu
 	}
@@ -1775,6 +1779,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		h.terminalDrop(c)
 		h.fullDrop(c)
 		h.uiConnectionGone(c)
+		h.extTerminalConnectionGone(c)
 	}()
 
 	// Track registration too: shutdown must not miss a newly hijacked connection.
@@ -1900,6 +1905,9 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		return
 	}
 	if c.role == roleScoped && !scopedSocketCommand(msg.Type) {
+		if strings.HasPrefix(msg.Type, "ext_terminal_") {
+			h.forwardExtTerminal(ctx, c, data)
+		}
 		return
 	}
 	if c.role == roleReadOnly {
@@ -1913,6 +1921,9 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 			return
 		}
 		if !readOnlySocketCommand(msg.Type) {
+			if strings.HasPrefix(msg.Type, "ext_terminal_") {
+				h.forwardExtTerminal(ctx, c, data)
+			}
 			return
 		}
 	}
@@ -1922,6 +1933,8 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	switch msg.Type {
 	case "extension_ui_stream":
 		h.forwardUIStream(ctx, c, data)
+	case "ext_terminal_open", "ext_terminal_subscribe", "ext_terminal_input", "ext_terminal_resize", "ext_terminal_close":
+		h.forwardExtTerminal(ctx, c, data)
 	case "client_hello":
 		h.onClientHello(c, data)
 	case "ping":

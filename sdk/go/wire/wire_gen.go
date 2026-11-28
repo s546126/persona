@@ -317,6 +317,7 @@ type Contributes struct {
 	TextLookup          []TextLookupItem         `json:"text_lookup,omitempty"`
 	MemorySources       []MemorySourceItem       `json:"memory_sources,omitempty"`
 	DiskOffload         []DiskOffloadItem        `json:"disk_offload,omitempty"`
+	TerminalSessions    []TerminalSessionItem    `json:"terminal_sessions,omitempty"`
 	Messaging           []MessagingItem          `json:"messaging,omitempty"`
 	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
 	AdditionalProperties map[string]json.RawMessage `json:"-"`
@@ -328,7 +329,7 @@ func (v *Contributes) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	declared := map[string]json.RawMessage{}
-	for _, key := range []string{"connectors", "voice", "transcription", "speech", "computer", "browser", "iphone", "quota", "usage", "providers", "api", "assistant", "mcp_servers", "ui", "track_kinds", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "routine_facts", "error_reports", "auth_relay", "secret_providers", "repository_providers", "text_lookup", "memory_sources", "disk_offload", "messaging"} {
+	for _, key := range []string{"connectors", "voice", "transcription", "speech", "computer", "browser", "iphone", "quota", "usage", "providers", "api", "assistant", "mcp_servers", "ui", "track_kinds", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "routine_facts", "error_reports", "auth_relay", "secret_providers", "repository_providers", "text_lookup", "memory_sources", "disk_offload", "terminal_sessions", "messaging"} {
 		if value, ok := extra[key]; ok {
 			declared[key] = value
 			delete(extra, key)
@@ -360,7 +361,7 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	}
 	for key, value := range v.AdditionalProperties {
 		switch key {
-		case "connectors", "voice", "transcription", "speech", "computer", "browser", "iphone", "quota", "usage", "providers", "api", "assistant", "mcp_servers", "ui", "track_kinds", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "routine_facts", "error_reports", "auth_relay", "secret_providers", "repository_providers", "text_lookup", "memory_sources", "disk_offload", "messaging":
+		case "connectors", "voice", "transcription", "speech", "computer", "browser", "iphone", "quota", "usage", "providers", "api", "assistant", "mcp_servers", "ui", "track_kinds", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "routine_facts", "error_reports", "auth_relay", "secret_providers", "repository_providers", "text_lookup", "memory_sources", "disk_offload", "terminal_sessions", "messaging":
 			continue
 		}
 		fields[key] = value
@@ -661,6 +662,18 @@ const (
 
 // DiskOffloadKinds are the values of DiskOffloadKind, in order.
 var DiskOffloadKinds = []string{"file", "dir", "app"}
+
+// TerminalSessionItem: an interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize,
+// terminal.close; terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer
+// machines/herdr panes; only full devices may open or type after explicit owner confirmation.
+type TerminalSessionItem struct {
+	ID string `json:"id"`
+	// Display label for the terminal provider.
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Optional concurrent session cap (default and hard limit 4 per extension).
+	MaxSessions int `json:"max_sessions,omitempty"`
+}
 
 // MemorySourceItem: the extension's memory, read by the manager one entry at a time (memory.entries;
 // memory.schema.json) so the hub decides which entries reach which scene (a conversation's standing context, a
@@ -2815,8 +2828,9 @@ type Action struct {
 	// Assistant only: send this text back to the same conversation. The hub reads it from the saved view, not from the
 	// client.
 	Reply string `json:"reply,omitempty"`
-	// Assistant only, except that a full extension page may open persona://session/<machine>/<session> or
-	// persona://task/<id>: an https URL or a validated persona session, task, kb or file target, opened inside the app.
+	// Assistant only, except that a full extension page may open persona://session/<machine>/<session>,
+	// persona://task/<id>, persona://terminal/<machine_id>, or persona://ext-terminal/<ext_id>/<target_id>: an https URL
+	// or a validated persona session, task, terminal, ext-terminal, kb or file target, opened inside the app.
 	Open string `json:"open,omitempty"`
 	// Assistant only: return one page within the card.
 	Pop bool `json:"pop,omitempty"`
@@ -6512,6 +6526,39 @@ type MachinesStatusResult struct {
 	Error string `json:"error,omitempty"`
 }
 
+// MachinesExecParams: machines.exec (machines.exec): run one command on a confirmed, online computer after the owner
+// approves it on a confirmation card. Provide exactly one of argv (direct exec without shell) or command (run via
+// /bin/sh -c).
+type MachinesExecParams struct {
+	// The computer's hub machine id.
+	MachineID string `json:"machine_id"`
+	// Direct executable and arguments without a shell (mutually exclusive with command; at most 64 items, total <= 4096
+	// bytes, no NUL bytes).
+	Argv []string `json:"argv,omitempty"`
+	// Shell command executed via /bin/sh -c (mutually exclusive with argv; at most 1024 characters, no NUL bytes).
+	Command string `json:"command,omitempty"`
+	// Optional working directory on the computer.
+	Cwd string `json:"cwd,omitempty"`
+	// Execution timeout in milliseconds (default 20000, max 60000).
+	TimeoutMs int `json:"timeout_ms,omitempty"`
+	// Maximum combined stdout and stderr bytes to return (default 16384, max 65536).
+	MaxOutputBytes int `json:"max_output_bytes,omitempty"`
+	// Optional human-readable explanation shown on the owner confirmation card.
+	Reason string `json:"reason,omitempty"`
+}
+
+type MachinesExecResult struct {
+	MachineID string `json:"machine_id"`
+	ExitCode  int    `json:"exit_code"`
+	// Combined stdout and stderr, safely truncated to max_output_bytes when needed.
+	Output string `json:"output"`
+	// Whether output exceeded max_output_bytes and was truncated.
+	Truncated  bool  `json:"truncated"`
+	DurationMs int64 `json:"duration_ms"`
+	TimedOut   bool  `json:"timed_out,omitempty"`
+	Cancelled  bool  `json:"cancelled,omitempty"`
+}
+
 // BrowserMachinesParams: browser.machines (browser.run): list computers that have a browser backend enabled.
 type BrowserMachinesParams struct {
 	// Optional backend filter (e.g. ego, cdp). Empty returns all backends.
@@ -7686,6 +7733,61 @@ type RoutineFactsResult struct {
 	Sections []RoutineReportSection `json:"sections,omitempty"`
 }
 
+// TerminalOpenParams: terminal.open: open an interactive PTY session for target at cols x rows.
+type TerminalOpenParams struct {
+	// Manager-assigned opaque PTY session id.
+	SessionID string `json:"session_id"`
+	// Extension-defined terminal target identifier.
+	Target string `json:"target"`
+	// Initial terminal width in columns.
+	Cols int `json:"cols"`
+	// Initial terminal height in rows.
+	Rows int `json:"rows"`
+}
+
+// TerminalOpenResult: terminal.open's answer: confirms the opened PTY session and optional display title.
+type TerminalOpenResult struct {
+	SessionID string `json:"session_id"`
+	Title     string `json:"title,omitempty"`
+}
+
+// TerminalInputParams: terminal.input: raw terminal input bytes (base64-encoded, at most 64 KiB decoded) typed by the
+// user.
+type TerminalInputParams struct {
+	SessionID string `json:"session_id"`
+	// Base64-encoded raw bytes to write to the PTY master.
+	DataB64 string `json:"data_b64"`
+}
+
+// TerminalResizeParams: terminal.resize: update the PTY window size.
+type TerminalResizeParams struct {
+	SessionID string `json:"session_id"`
+	Cols      int    `json:"cols"`
+	Rows      int    `json:"rows"`
+}
+
+// TerminalCloseParams: terminal.close: close the PTY session (user closed, last subscriber disconnected, or idle
+// timeout).
+type TerminalCloseParams struct {
+	SessionID string `json:"session_id"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+// TerminalFrameEvent: terminal.frame (program -> hub): one ordered chunk of PTY output bytes (base64-encoded, at most
+// 64 KiB decoded).
+type TerminalFrameEvent struct {
+	SessionID string `json:"session_id"`
+	Seq       int    `json:"seq"`
+	DataB64   string `json:"data_b64"`
+}
+
+// TerminalClosedEvent: terminal.closed (program -> hub): the PTY session exited or closed.
+type TerminalClosedEvent struct {
+	SessionID string `json:"session_id"`
+	ExitCode  *int   `json:"exit_code,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+}
+
 // requiredJSONComponent preserves required fields only inside stream payloads.
 type requiredJSONComponent Component
 
@@ -8309,6 +8411,7 @@ var newDef = map[string]func() any{
 	"RepositoryProviderItem":        func() any { return new(RepositoryProviderItem) },
 	"TextLookupItem":                func() any { return new(TextLookupItem) },
 	"DiskOffloadItem":               func() any { return new(DiskOffloadItem) },
+	"TerminalSessionItem":           func() any { return new(TerminalSessionItem) },
 	"MemorySourceItem":              func() any { return new(MemorySourceItem) },
 	"RepositoryLinkLabel":           func() any { return new(RepositoryLinkLabel) },
 	"RoutineFactsItem":              func() any { return new(RoutineFactsItem) },
@@ -8735,6 +8838,8 @@ var newDef = map[string]func() any{
 	"MachinesPairLinkResult":        func() any { return new(MachinesPairLinkResult) },
 	"MachinesStatusParams":          func() any { return new(MachinesStatusParams) },
 	"MachinesStatusResult":          func() any { return new(MachinesStatusResult) },
+	"MachinesExecParams":            func() any { return new(MachinesExecParams) },
+	"MachinesExecResult":            func() any { return new(MachinesExecResult) },
 	"BrowserMachinesParams":         func() any { return new(BrowserMachinesParams) },
 	"BrowserMachine":                func() any { return new(BrowserMachine) },
 	"BrowserMachinesResult":         func() any { return new(BrowserMachinesResult) },
@@ -8822,6 +8927,13 @@ var newDef = map[string]func() any{
 	"RoutineFactsParams":            func() any { return new(RoutineFactsParams) },
 	"RoutineReportSection":          func() any { return new(RoutineReportSection) },
 	"RoutineFactsResult":            func() any { return new(RoutineFactsResult) },
+	"TerminalOpenParams":            func() any { return new(TerminalOpenParams) },
+	"TerminalOpenResult":            func() any { return new(TerminalOpenResult) },
+	"TerminalInputParams":           func() any { return new(TerminalInputParams) },
+	"TerminalResizeParams":          func() any { return new(TerminalResizeParams) },
+	"TerminalCloseParams":           func() any { return new(TerminalCloseParams) },
+	"TerminalFrameEvent":            func() any { return new(TerminalFrameEvent) },
+	"TerminalClosedEvent":           func() any { return new(TerminalClosedEvent) },
 }
 
 // Call is one call or event of an extension point's protocol (the schemas' x-methods and x-events): who
@@ -8910,6 +9022,7 @@ var Calls = map[string]Call{
 	"assistant.data_status":           {Name: "assistant.data_status", From: "program", Params: "AssistantDataStatusParams", Result: "AssistantDataStatusResult"},
 	"machines.pair_link":              {Name: "machines.pair_link", From: "program", Params: "MachinesPairLinkParams", Result: "MachinesPairLinkResult"},
 	"machines.status":                 {Name: "machines.status", From: "program", Params: "MachinesStatusParams", Result: "MachinesStatusResult"},
+	"machines.exec":                   {Name: "machines.exec", From: "program", Params: "MachinesExecParams", Result: "MachinesExecResult"},
 	"browser.machines":                {Name: "browser.machines", From: "program", Params: "BrowserMachinesParams", Result: "BrowserMachinesResult"},
 	"browser.run":                     {Name: "browser.run", From: "program", Params: "BrowserRunParams", Result: "BrowserRunResult"},
 	"storage.request":                 {Name: "storage.request", From: "program", Params: "StorageEmptyParams", Result: "StorageRequestResult"},
@@ -8943,4 +9056,10 @@ var Calls = map[string]Call{
 	"offload.job":                     {Name: "offload.job", From: "hub", Params: "OffloadJobParams", Result: "OffloadJob"},
 	"offload.cancel":                  {Name: "offload.cancel", From: "hub", Params: "OffloadJobParams", Result: "Empty"},
 	"routine_facts.collect":           {Name: "routine_facts.collect", From: "hub", Params: "RoutineFactsParams", Result: "RoutineFactsResult"},
+	"terminal.open":                   {Name: "terminal.open", From: "hub", Params: "TerminalOpenParams", Result: "TerminalOpenResult"},
+	"terminal.input":                  {Name: "terminal.input", From: "hub", Params: "TerminalInputParams", Result: "Empty"},
+	"terminal.resize":                 {Name: "terminal.resize", From: "hub", Params: "TerminalResizeParams", Result: "Empty"},
+	"terminal.close":                  {Name: "terminal.close", From: "hub", Params: "TerminalCloseParams", Result: "Empty"},
+	"terminal.frame":                  {Name: "terminal.frame", From: "program", Params: "TerminalFrameEvent", Result: "", Event: true},
+	"terminal.closed":                 {Name: "terminal.closed", From: "program", Params: "TerminalClosedEvent", Result: "", Event: true},
 }

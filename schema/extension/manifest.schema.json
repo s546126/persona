@@ -319,7 +319,7 @@
         "network": {"type": "array", "items": {"$ref": "#/$defs/NetworkEntry"}},
         "hub_api": {"type": "boolean", "description": "The old way: the hub's full token. With hub scopes, the scopes win."},
         "hub": {"type": "array", "description": "The scopes of the hub's API it calls: its token opens their routes only.",
-          "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|kb\\.import_status|sent\\.read|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|agents\\.archive_idle|agents\\.permission_mode|machines\\.read|machines\\.pair|browser\\.run|notify|push\\.grading|assistant\\.ask|spaces|assistant\\.read|assistant\\.memory\\.read|assistant\\.entries\\.read|todos\\.read|todos\\.write|tasks\\.schedule|decisions\\.raise|bots\\.feishu\\.identity|bots\\.feishu\\.handoff|leaders\\.read|leaders\\.write|assistant\\.dispatch_policy|assistant\\.start_defaults|dispatch.guard|models|transcription|market\\.refresh_own|assistant\\.events|lark\\.messages\\.read|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
+          "items": {"type": "string", "pattern": "^(kb\\.read|kb\\.write|kb\\.import_status|sent\\.read|inbox\\.read|inbox\\.write|agents\\.read|agents\\.control|agents\\.archive_idle|agents\\.permission_mode|machines\\.read|machines\\.pair|machines\\.exec|browser\\.run|notify|push\\.grading|assistant\\.ask|spaces|assistant\\.read|assistant\\.memory\\.read|assistant\\.entries\\.read|todos\\.read|todos\\.write|tasks\\.schedule|decisions\\.raise|bots\\.feishu\\.identity|bots\\.feishu\\.handoff|leaders\\.read|leaders\\.write|assistant\\.dispatch_policy|assistant\\.start_defaults|dispatch.guard|models|transcription|market\\.refresh_own|assistant\\.events|lark\\.messages\\.read|extensions\\.call:[a-z0-9][a-z0-9_-]{0,31})$"}},
         "launcher_keys": {"type": "boolean"},
         "gh_login": {"type": "boolean", "description": "It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector), held in its memory only."},
         "usage_gateways": {"type": "boolean", "description": "It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts): accounts, status and quota windows, never a key."},
@@ -381,6 +381,7 @@
         "text_lookup": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/TextLookupItem"}},
         "memory_sources": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/MemorySourceItem"}},
         "disk_offload": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/DiskOffloadItem"}},
+        "terminal_sessions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/TerminalSessionItem"}},
         "messaging": {"type": "array", "minItems": 1, "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
       }
     },
@@ -632,6 +633,18 @@
       "description": "What a disk_offload provider takes: file, dir (a folder) or app (a macOS app bundle).",
       "type": "string",
       "enum": ["file", "dir", "app"]
+    },
+    "TerminalSessionItem": {
+      "description": "An interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize, terminal.close; terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer machines/herdr panes; only full devices may open or type after explicit owner confirmation.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 80, "description": "Display label for the terminal provider."},
+        "description": {"type": "string", "maxLength": 200},
+        "max_sessions": {"type": "integer", "minimum": 1, "maximum": 4, "description": "Optional concurrent session cap (default and hard limit 4 per extension)."}
+      },
+      "required": ["id"]
     },
     "MemorySourceItem": {
       "description": "The extension's memory, read by the manager one entry at a time (memory.entries; memory.schema.json) so the hub decides which entries reach which scene (a conversation's standing context, a recall, a dispatched task, the Inbox's helper). Needs the program to speak the protocol; one per extension. Once declared, the hub stops delivering the extension's own text outlets (its assistant instructions, project context, Inbox context and its connectors' read tools in the assistant's conversations) directly.",

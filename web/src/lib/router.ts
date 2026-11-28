@@ -69,6 +69,7 @@ export type Route =
   // progress board (#12713). Either view keeps the open to-do beside it.
   | { name: "todos"; id?: string; direction?: string; manager?: string; view?: "calendar" | "board"; mode?: "day" | "week" | "month"; date?: string }
   | { name: "extension"; extension: string; ui: string }
+  | { name: "ext-terminal"; extension: string; target: string }
   // the source subscription pages (#2041), their first state in ?state=
   | { name: "subscriptions" }
   // where Feishu / Lark sends the owner back after allowing a bot's app to read as them (`?code=&state=`, the daily sync's
@@ -159,6 +160,9 @@ export function parse(path: string, search = ""): Route {
   if (p[0] === "subscriptions") return { name: "subscriptions" };
   // /plugin/<id>/<ui>: the same page under its name before #1845 (bookmarks)
   if ((p[0] === "extension" || p[0] === "plugin") && p[1] && p[2]) {
+    if (p[2] === "terminal" && p[3] && !p[4]) {
+      return { name: "ext-terminal", extension: p[1], target: p[3] };
+    }
     // a reserved id a feature module draws is unknown while the module is off (core/module-host.ts)
     return moduleExtensionAt(p[1]) === "absent" ? notFound(path, search) : { name: "extension", extension: p[1], ui: p[2] };
   }
@@ -285,6 +289,8 @@ export function routePath(r: Route): string {
     }
     case "extension":
       return `/extension/${encodeURIComponent(r.extension)}/${encodeURIComponent(r.ui)}`;
+    case "ext-terminal":
+      return `/extension/${encodeURIComponent(r.extension)}/terminal/${encodeURIComponent(r.target)}`;
     case "subscriptions":
       return "/subscriptions";
     case "lark-oauth":

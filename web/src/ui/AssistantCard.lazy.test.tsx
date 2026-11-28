@@ -100,6 +100,12 @@ describe("openTargetOf", () => {
     openTargetOf("persona://file/m1/%2Ftmp%2Freport.md");
     expect(mocks.openPanel).toHaveBeenCalledWith({ kind: "file", mid: "m1", path: "/tmp/report.md" });
 
+    openTargetOf("persona://terminal/mac-studio");
+    expect(mocks.navigate).toHaveBeenCalledWith({ name: "machine", mid: "mac-studio", subview: "terminal" });
+
+    openTargetOf("persona://ext-terminal/ensemble/worker-1");
+    expect(mocks.navigate).toHaveBeenCalledWith({ name: "ext-terminal", extension: "ensemble", target: "worker-1" });
+
     openTargetOf("javascript:alert(1)");
     expect(mocks.toast).toHaveBeenCalledWith(t("ui-assistantcard.cannot_open"), "error");
   });
@@ -173,4 +179,57 @@ describe("AssistantCard and LiveCard on-demand loading", () => {
     expect(host.textContent).toContain("Lazy Live Card");
     expect(host.textContent).toContain("Loaded live body");
   }, 60_000);
+
+  it("forces owner confirmation before opening persona://terminal even when Action.confirm is omitted", async () => {
+    mocks.navigate.mockClear();
+    const card = {
+      title: "Terminal Card",
+      fallback: "open terminal",
+      sections: [
+        {
+          items: [
+            {
+              type: "button",
+              title: "Open Shell",
+              action: { id: "open-term", open: "persona://terminal/mac-studio" },
+            },
+          ],
+        },
+      ],
+    };
+    const code = JSON.stringify(card);
+    await act(async () => {
+      root.render(
+        <CardConversation.Provider value="c-term">
+          <CardItem.Provider value={{ id: "item-term", text: "```persona-view\n" + code + "\n```\n" }}>
+            <AssistantCard lang="persona-view" code={code} fallback={<pre>raw</pre>} />
+          </CardItem.Provider>
+        </CardConversation.Provider>,
+      );
+    });
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain("Open Shell");
+    });
+
+    const openBtn = [...host.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes("Open Shell"));
+    expect(openBtn).toBeTruthy();
+
+    await act(async () => {
+      openBtn!.click();
+    });
+
+    // Must NOT navigate silently before explicit confirmation!
+    expect(mocks.navigate).not.toHaveBeenCalled();
+
+    // Default confirmation dialog must be shown with OK button.
+    const okLabel = t("settings-extensionview.ok");
+    const confirmBtn = [...document.body.querySelectorAll("button")].find((b) => (b.textContent ?? "").trim() === okLabel);
+    expect(confirmBtn).toBeTruthy();
+
+    await act(async () => {
+      confirmBtn!.click();
+    });
+
+    expect(mocks.navigate).toHaveBeenCalledWith({ name: "machine", mid: "mac-studio", subview: "terminal" });
+  });
 });

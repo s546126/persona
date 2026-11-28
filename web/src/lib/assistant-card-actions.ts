@@ -11,10 +11,24 @@ export type OpenTarget =
   | { kind: "session"; mid: string; sid: string }
   | { kind: "task"; id: string }
   | { kind: "kb"; path: string[] }
-  | { kind: "file"; mid: string; path: string };
+  | { kind: "file"; mid: string; path: string }
+  | { kind: "terminal"; mid: string }
+  | { kind: "ext-terminal"; extension: string; target: string };
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+const EXT_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+function validTerminalSeg(s: string): boolean {
+  return !!s && s.length <= 128 && s !== "." && s !== ".." && !CONTROL.test(s) && !/[\s/\\?#]/.test(s);
+}
+
+/** Whether opening `target` must always show an explicit owner confirmation dialog first. */
+export function requiresOpenConfirmation(target: string | undefined): boolean {
+  if (!target) return false;
+  const to = openTarget(target);
+  return to?.kind === "terminal" || to?.kind === "ext-terminal";
+}
 
 /** What an open action opens, or undefined when it is not one the apps open (never handed to the system). */
 export function openTarget(target: string): OpenTarget | undefined {
@@ -55,6 +69,12 @@ export function openTarget(target: string): OpenTarget | undefined {
       return decoded.some((p) => p === "." || p === "..") ? undefined : { kind: "kb", path: decoded };
     case "file":
       return decoded.length === 2 && !decoded[0].includes("/") && decoded[1].startsWith("/") ? { kind: "file", mid: decoded[0], path: decoded[1] } : undefined;
+    case "terminal":
+      return decoded.length === 1 && validTerminalSeg(decoded[0]) ? { kind: "terminal", mid: decoded[0] } : undefined;
+    case "ext-terminal":
+      return decoded.length === 2 && EXT_ID.test(decoded[0]) && validTerminalSeg(decoded[1])
+        ? { kind: "ext-terminal", extension: decoded[0], target: decoded[1] }
+        : undefined;
   }
   return undefined;
 }

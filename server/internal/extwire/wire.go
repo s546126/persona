@@ -322,6 +322,9 @@ const (
 	// HubMachinesStatus: {extension, request} → wire.MachinesStatusResult: returns the current connection and
 	// confirmation status of a computer.
 	HubMachinesStatus = "machines.status"
+	// HubMachinesExec: {extension, request} → wire.MachinesExecResult: executes a confirmed command on an online,
+	// confirmed computer owned by the calling manager (#16741).
+	HubMachinesExec = "machines.exec"
 )
 
 // MethodAccept: {id} → {}: the hub holds a request for the manager (a relayed route): it dials the relay with the id.

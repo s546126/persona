@@ -450,6 +450,7 @@ data class ExtensionContributes(
     @SerialName("text_lookup") val textLookup: List<ExtensionTextLookupItem>? = null,
     @SerialName("memory_sources") val memorySources: List<ExtensionMemorySourceItem>? = null,
     @SerialName("disk_offload") val diskOffload: List<ExtensionDiskOffloadItem>? = null,
+    @SerialName("terminal_sessions") val terminalSessions: List<ExtensionTerminalSessionItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
     /** Extra keys stay at this object's level on the wire; declared fields always win. */
     val additionalProperties: Map<String, JsonElement> = emptyMap(),
@@ -491,12 +492,13 @@ private data class ExtensionContributesKnown(
     @SerialName("text_lookup") val textLookup: List<ExtensionTextLookupItem>? = null,
     @SerialName("memory_sources") val memorySources: List<ExtensionMemorySourceItem>? = null,
     @SerialName("disk_offload") val diskOffload: List<ExtensionDiskOffloadItem>? = null,
+    @SerialName("terminal_sessions") val terminalSessions: List<ExtensionTerminalSessionItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
 )
 
 object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
     private val known = ExtensionContributesKnown.serializer()
-    private val keys = setOf<String>("connectors", "voice", "transcription", "speech", "computer", "browser", "iphone", "quota", "usage", "providers", "api", "assistant", "mcp_servers", "ui", "track_kinds", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "routine_facts", "error_reports", "auth_relay", "secret_providers", "repository_providers", "text_lookup", "memory_sources", "disk_offload", "messaging")
+    private val keys = setOf<String>("connectors", "voice", "transcription", "speech", "computer", "browser", "iphone", "quota", "usage", "providers", "api", "assistant", "mcp_servers", "ui", "track_kinds", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "routine_facts", "error_reports", "auth_relay", "secret_providers", "repository_providers", "text_lookup", "memory_sources", "disk_offload", "terminal_sessions", "messaging")
     override val descriptor: SerialDescriptor = known.descriptor
 
     override fun deserialize(decoder: Decoder): ExtensionContributes {
@@ -539,6 +541,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             textLookup = fields.textLookup,
             memorySources = fields.memorySources,
             diskOffload = fields.diskOffload,
+            terminalSessions = fields.terminalSessions,
             messaging = fields.messaging,
             additionalProperties = obj.filterKeys { it !in keys },
         )
@@ -581,6 +584,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             textLookup = value.textLookup,
             memorySources = value.memorySources,
             diskOffload = value.diskOffload,
+            terminalSessions = value.terminalSessions,
             messaging = value.messaging,
         )
         val obj = output.json.encodeToJsonElement(known, fields) as JsonObject
@@ -976,6 +980,25 @@ object ExtensionDiskOffloadKind {
     const val APP = "app"
     val ALL = listOf("file", "dir", "app")
 }
+
+/**
+ * An interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize, terminal.close;
+ * terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer machines/herdr panes;
+ * only full devices may open or type after explicit owner confirmation.
+ */
+@Serializable
+data class ExtensionTerminalSessionItem(
+    val id: String = "",
+    /**
+     * Display label for the terminal provider.
+     */
+    val title: String? = null,
+    val description: String? = null,
+    /**
+     * Optional concurrent session cap (default and hard limit 4 per extension).
+     */
+    @SerialName("max_sessions") val maxSessions: Int? = null,
+)
 
 /**
  * The extension's memory, read by the manager one entry at a time (memory.entries; memory.schema.json) so the hub
@@ -4220,9 +4243,9 @@ data class ExtensionAction(
      */
     val reply: String? = null,
     /**
-     * Assistant only, except that a full extension page may open persona://session/<machine>/<session> or
-     * persona://task/<id>: an https URL or a validated persona session, task, kb or file target, opened inside the
-     * app.
+     * Assistant only, except that a full extension page may open persona://session/<machine>/<session>,
+     * persona://task/<id>, persona://terminal/<machine_id>, or persona://ext-terminal/<ext_id>/<target_id>: an https
+     * URL or a validated persona session, task, terminal, ext-terminal, kb or file target, opened inside the app.
      */
     val open: String? = null,
     /**

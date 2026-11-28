@@ -13,6 +13,8 @@ import kotlinx.serialization.Serializable
     val machineId: String,
     /** The history range named by a hub link; null keeps the screen's default and the route's old saved form. */
     val range: String? = null,
+    /** Optional subview (e.g. "terminal" for /machines/<id>/terminal); null preserves the default view. */
+    val subview: String? = null,
 ) : NavKey
 /**
  * One computer's projects (iOS `MachineRoute`, `MachineSpacesView`, #4338 A11): its herdr spaces, the ones with something going

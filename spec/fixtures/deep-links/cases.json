@@ -623,6 +623,31 @@
       }
     },
     {
+      "name": "computer terminal subview",
+      "url": "https://hub.example.com/machines/mac-1/terminal",
+      "hubs": [
+        "home"
+      ],
+      "page": {
+        "page": "machine",
+        "id": "mac-1",
+        "subview": "terminal",
+        "hub": "hub-home"
+      }
+    },
+    {
+      "name": "app link to computer terminal subview",
+      "url": "persona://open/machines/mac-1/terminal",
+      "hubs": [
+        "home"
+      ],
+      "page": {
+        "page": "machine",
+        "id": "mac-1",
+        "subview": "terminal"
+      }
+    },
+    {
       "name": "settings",
       "url": "https://hub.example.com/settings",
       "hubs": [

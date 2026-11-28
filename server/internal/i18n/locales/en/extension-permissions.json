@@ -72,6 +72,7 @@
   "scope_agents_permission_mode": "Change the permission mode of the chats it started itself",
   "scope_machines_read": "View your computers (connectivity and load)",
   "scope_machines_pair": "Pair new computers (pending your confirmation)",
+  "scope_machines_exec": "Run commands on your computers (requires your confirmation each time)",
   "scope_browser_run": "Run scripts in an isolated tab of your paired computer's browser",
   "scope_notify": "Send notifications to your devices",
   "scope_push_grading": "Manage its push grading layer and preview grading decisions",

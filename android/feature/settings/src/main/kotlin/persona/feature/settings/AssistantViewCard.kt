@@ -187,6 +187,12 @@ internal fun AssistantViewCard(key: String, version: Long, card: AssistantCard, 
             is AssistantOpenTarget.Session -> {
                 val _ = runCatching { uri.openUri("persona://session/${segment(target.machine)}/${segment(target.session)}") }
             }
+            is AssistantOpenTarget.Terminal -> {
+                val _ = runCatching { uri.openUri("persona://open/machines/${segment(target.machine)}/terminal") }
+            }
+            is AssistantOpenTarget.ExtensionTerminal -> {
+                val _ = runCatching { uri.openUri("persona://open/extension/${segment(target.extension)}/terminal/${segment(target.target)}") }
+            }
             null -> feedback?.notice(badLinkText)
             else -> feedback?.notice(unsupportedText)
         }
@@ -213,7 +219,7 @@ internal fun AssistantViewCard(key: String, version: Long, card: AssistantCard, 
         when {
             action.push != null -> if (stack.size < AssistantCards.MostDepth) pushed = stack + action.push!!
             action.pop -> pushed = stack.dropLast(1)
-            action.open != null -> if (action.confirm != null) confirming = Confirming(item, action, emptyMap(), version) else open(action.open!!)
+            action.open != null -> if (action.confirm != null || AssistantOpen.requiresConfirmation(action.open)) confirming = Confirming(item, action, emptyMap(), version) else open(action.open!!)
             action.reply != null -> reply(item, action, card.fields(action).associateWith { values[it].orEmpty() })
         }
     }

@@ -372,6 +372,7 @@ export interface Contributes {
   text_lookup?: TextLookupItem[];
   memory_sources?: MemorySourceItem[];
   disk_offload?: DiskOffloadItem[];
+  terminal_sessions?: TerminalSessionItem[];
   messaging?: MessagingItem[];
   /** Extra keys are opaque JSON; declared properties keep their own types. */
   [key: string]: unknown;
@@ -659,6 +660,20 @@ export interface DiskOffloadItem {
  */
 export type DiskOffloadKind = "file" | "dir" | "app" | (string & {});
 export const DISK_OFFLOAD_KINDS = ["file", "dir", "app"] as const;
+
+/**
+ * An interactive PTY terminal session provider (terminal.open, terminal.input, terminal.resize, terminal.close;
+ * terminal.frame and terminal.closed events; terminal.schema.json). Isolated from real computer machines/herdr panes;
+ * only full devices may open or type after explicit owner confirmation.
+ */
+export interface TerminalSessionItem {
+  id: string;
+  /** Display label for the terminal provider. */
+  title?: string;
+  description?: string;
+  /** Optional concurrent session cap (default and hard limit 4 per extension). */
+  max_sessions?: number;
+}
 
 /**
  * The extension's memory, read by the manager one entry at a time (memory.entries; memory.schema.json) so the hub
@@ -3062,8 +3077,9 @@ export interface Action {
    */
   reply?: string;
   /**
-   * Assistant only, except that a full extension page may open persona://session/<machine>/<session> or
-   * persona://task/<id>: an https URL or a validated persona session, task, kb or file target, opened inside the app.
+   * Assistant only, except that a full extension page may open persona://session/<machine>/<session>,
+   * persona://task/<id>, persona://terminal/<machine_id>, or persona://ext-terminal/<ext_id>/<target_id>: an https
+   * URL or a validated persona session, task, terminal, ext-terminal, kb or file target, opened inside the app.
    */
   open?: string;
   /** Assistant only: return one page within the card. */
@@ -7018,6 +7034,42 @@ export interface MachinesStatusResult {
 }
 
 /**
+ * machines.exec (machines.exec): run one command on a confirmed, online computer after the owner approves it on a
+ * confirmation card. Provide exactly one of argv (direct exec without shell) or command (run via /bin/sh -c).
+ */
+export interface MachinesExecParams {
+  /** The computer's hub machine id. */
+  machine_id: string;
+  /**
+   * Direct executable and arguments without a shell (mutually exclusive with command; at most 64 items, total <= 4096
+   * bytes, no NUL bytes).
+   */
+  argv?: string[];
+  /** Shell command executed via /bin/sh -c (mutually exclusive with argv; at most 1024 characters, no NUL bytes). */
+  command?: string;
+  /** Optional working directory on the computer. */
+  cwd?: string;
+  /** Execution timeout in milliseconds (default 20000, max 60000). */
+  timeout_ms?: number;
+  /** Maximum combined stdout and stderr bytes to return (default 16384, max 65536). */
+  max_output_bytes?: number;
+  /** Optional human-readable explanation shown on the owner confirmation card. */
+  reason?: string;
+}
+
+export interface MachinesExecResult {
+  machine_id: string;
+  exit_code: number;
+  /** Combined stdout and stderr, safely truncated to max_output_bytes when needed. */
+  output: string;
+  /** Whether output exceeded max_output_bytes and was truncated. */
+  truncated: boolean;
+  duration_ms: number;
+  timed_out?: boolean;
+  cancelled?: boolean;
+}
+
+/**
  * browser.machines (browser.run): list computers that have a browser backend enabled.
  */
 export interface BrowserMachinesParams {
@@ -8156,6 +8208,72 @@ export interface RoutineFactsResult {
   sections?: RoutineReportSection[];
 }
 
+/**
+ * terminal.open: open an interactive PTY session for target at cols x rows.
+ */
+export interface TerminalOpenParams {
+  /** Manager-assigned opaque PTY session id. */
+  session_id: string;
+  /** Extension-defined terminal target identifier. */
+  target: string;
+  /** Initial terminal width in columns. */
+  cols: number;
+  /** Initial terminal height in rows. */
+  rows: number;
+}
+
+/**
+ * terminal.open's answer: confirms the opened PTY session and optional display title.
+ */
+export interface TerminalOpenResult {
+  session_id: string;
+  title?: string;
+}
+
+/**
+ * terminal.input: raw terminal input bytes (base64-encoded, at most 64 KiB decoded) typed by the user.
+ */
+export interface TerminalInputParams {
+  session_id: string;
+  /** Base64-encoded raw bytes to write to the PTY master. */
+  data_b64: string;
+}
+
+/**
+ * terminal.resize: update the PTY window size.
+ */
+export interface TerminalResizeParams {
+  session_id: string;
+  cols: number;
+  rows: number;
+}
+
+/**
+ * terminal.close: close the PTY session (user closed, last subscriber disconnected, or idle timeout).
+ */
+export interface TerminalCloseParams {
+  session_id: string;
+  reason?: string;
+}
+
+/**
+ * terminal.frame (program -> hub): one ordered chunk of PTY output bytes (base64-encoded, at most 64 KiB decoded).
+ */
+export interface TerminalFrameEvent {
+  session_id: string;
+  seq: number;
+  data_b64: string;
+}
+
+/**
+ * terminal.closed (program -> hub): the PTY session exited or closed.
+ */
+export interface TerminalClosedEvent {
+  session_id: string;
+  exit_code?: number;
+  reason?: string;
+}
+
 /** One call or event of an extension point's protocol: who sends it, and the definitions its params and
  * its answer hold to (no result: any JSON; an event has no answer). */
 export interface Call {
@@ -8243,6 +8361,7 @@ export const CALLS: Record<string, Call> = {
   "assistant.data_status": { from: "program", params: "AssistantDataStatusParams", result: "AssistantDataStatusResult" },
   "machines.pair_link": { from: "program", params: "MachinesPairLinkParams", result: "MachinesPairLinkResult" },
   "machines.status": { from: "program", params: "MachinesStatusParams", result: "MachinesStatusResult" },
+  "machines.exec": { from: "program", params: "MachinesExecParams", result: "MachinesExecResult" },
   "browser.machines": { from: "program", params: "BrowserMachinesParams", result: "BrowserMachinesResult" },
   "browser.run": { from: "program", params: "BrowserRunParams", result: "BrowserRunResult" },
   "storage.request": { from: "program", params: "StorageEmptyParams", result: "StorageRequestResult" },
@@ -8276,4 +8395,10 @@ export const CALLS: Record<string, Call> = {
   "offload.job": { from: "hub", params: "OffloadJobParams", result: "OffloadJob" },
   "offload.cancel": { from: "hub", params: "OffloadJobParams", result: "Empty" },
   "routine_facts.collect": { from: "hub", params: "RoutineFactsParams", result: "RoutineFactsResult" },
+  "terminal.open": { from: "hub", params: "TerminalOpenParams", result: "TerminalOpenResult" },
+  "terminal.input": { from: "hub", params: "TerminalInputParams", result: "Empty" },
+  "terminal.resize": { from: "hub", params: "TerminalResizeParams", result: "Empty" },
+  "terminal.close": { from: "hub", params: "TerminalCloseParams", result: "Empty" },
+  "terminal.frame": { from: "program", params: "TerminalFrameEvent", event: true },
+  "terminal.closed": { from: "program", params: "TerminalClosedEvent", event: true },
 };

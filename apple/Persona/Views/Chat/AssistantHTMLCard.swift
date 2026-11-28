@@ -40,11 +40,35 @@ nonisolated enum HTMLCardRequest: Equatable, Sendable {
 }
 
 /// What a card may open (an `open` action, a page's `persona.open`): an https page, or one of the app's own places
-/// `persona://session|task|kb|file/<something>`. Nothing else: no http, no other app's scheme, no javascript:.
+/// `persona://session|task|kb|file|terminal|ext-terminal/<something>`. Nothing else: no http, no other app's scheme, no javascript:.
 nonisolated enum AssistantViewLink {
-    static let places: Set<String> = ["session", "task", "kb", "file"]
+    static let places: Set<String> = ["session", "task", "kb", "file", "terminal", "ext-terminal"]
+
+    /// Terminal destinations always require explicit owner confirmation before navigation.
+    static func requiresConfirmation(_ raw: String?) -> Bool {
+        guard let raw, allowed(raw), let comps = URLComponents(string: raw),
+              let host = comps.host?.lowercased() else { return false }
+        return host == "terminal" || host == "ext-terminal"
+    }
 
     static func allowed(_ url: URL) -> Bool { allowed(url.absoluteString) }
+
+    private static func validTerminalSegment(_ s: String) -> Bool {
+        guard !s.isEmpty, s.count <= 128, s != ".", s != ".." else { return false }
+        return !s.unicodeScalars.contains {
+            CharacterSet.controlCharacters.contains($0) || CharacterSet.whitespacesAndNewlines.contains($0) ||
+            $0 == "/" || $0 == "\\" || $0 == "?" || $0 == "#"
+        }
+    }
+
+    private static func validExtensionID(_ s: String) -> Bool {
+        guard !s.isEmpty, s.count <= 64 else { return false }
+        for (i, ch) in s.utf8.enumerated() {
+            let ok = (ch >= 48 && ch <= 57) || (ch >= 97 && ch <= 122) || (i > 0 && (ch == 45 || ch == 95))
+            if !ok { return false }
+        }
+        return true
+    }
 
     /// Inspect the original spelling before URL normalizes malformed percent escapes or control characters.
     static func allowed(_ raw: String) -> Bool {
@@ -73,6 +97,8 @@ nonisolated enum AssistantViewLink {
             case "session": return parts.count == 2
             case "task": return parts.count == 1
             case "kb": return !parts.isEmpty && parts.allSatisfy { $0 != "." && $0 != ".." }
+            case "terminal": return parts.count == 1 && validTerminalSegment(parts[0])
+            case "ext-terminal": return parts.count == 2 && validExtensionID(parts[0]) && validTerminalSegment(parts[1])
             default: return false
             }
         default:

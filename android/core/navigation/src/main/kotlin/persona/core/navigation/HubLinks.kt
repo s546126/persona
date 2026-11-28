@@ -79,6 +79,7 @@ object HubLinks {
                     HubPage.Screen(ExtensionRoute(parts[1])) else null
             }
             "extension" -> if (parts.size == 2) extension(parts[0], parts[1], query) else null
+            "terminal" -> if (parts.size == 1) HubPage.Screen(MachineDetailRoute(parts[0], subview = "terminal")) else null
             else -> null
         } ?: return rejected(Reason.NotAPage)
         if (requestedHub != null && hubs.none { it.id == requestedHub }) return rejected(Reason.External)
@@ -173,9 +174,10 @@ object HubLinks {
                 3 -> knowledgeKind(p[1])?.let { HubPage.KnowledgeEntry(it.wire, p[2]) }
                 else -> null
             }
-            "machines" -> when (p.size) {
-                1 -> HubPage.Screen(MachinesRoute)
-                2 -> HubPage.Screen(MachineDetailRoute(p[1], range = query.value("range")))
+            "machines" -> when {
+                p.size == 1 -> HubPage.Screen(MachinesRoute)
+                p.size == 2 -> HubPage.Screen(MachineDetailRoute(p[1], range = query.value("range")))
+                p.size == 3 && p[2] == "terminal" -> HubPage.Screen(MachineDetailRoute(p[1], subview = "terminal"))
                 else -> null
             }
             "settings" -> when {

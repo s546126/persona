@@ -78,7 +78,7 @@ class DeepLinkFixtureTest {
         TodosRoute -> values("todos")
         is TodoDetailRoute -> values("todo", "id" to key.todoId)
         MachinesRoute -> values("machines")
-        is MachineDetailRoute -> values("machine", "id" to key.machineId, "range" to key.range)
+        is MachineDetailRoute -> values("machine", "id" to key.machineId, "range" to key.range, "subview" to key.subview)
         SettingsRoute -> values("settings")
         is ModelPurposeRoute -> values("settings", "tab" to "models", "item" to key.purposeId, "manager" to key.manager)
         is ExtensionRoute -> values("settings", "tab" to "extensions", "item" to key.extensionId, "manager" to key.manager)

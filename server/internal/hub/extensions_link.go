@@ -223,7 +223,7 @@ func machineExtrasEqual(a, b map[string]extwire.MachineExtras) bool {
 // features are the hub's features with those of the extensions serving part of the API.
 func (h *Hub) features() []string {
 	out := append(slices.Clone(proto.Features), featureSessionsList, featureSessionsLookup, featureSessionsPaneSource, featureSessionsManager, featureSessionsPageCounts,
-		featureSessionsSearch, featureAgentsPageCounts, featureAgentsProviderOR, featureSessionsHierarchy, featureSessionsCrossMachineHierarchy, featureSessionsCatalog, featureSessionsTodo, featureSessionsQuickFilters, featureSessionsJustFinished, featureSessionsAgentsOnly, featureMachineRename, featureDesktopUnregister, nodeproto.MCPWait, "starred_messages")
+		featureSessionsSearch, featureAgentsPageCounts, featureAgentsProviderOR, featureSessionsHierarchy, featureSessionsCrossMachineHierarchy, featureSessionsCatalog, featureSessionsTodo, featureSessionsQuickFilters, featureSessionsJustFinished, featureSessionsAgentsOnly, featureMachineRename, featureDesktopUnregister, nodeproto.MCPWait, "starred_messages", extwire.FeatureExtTerminal)
 	out = append(out, h.agentSessionArchiveFeatures()...)
 	out = append(out, h.agentAutonameFeatures()...)
 	out = append(out, h.sessionsSideFoldFeatures()...)
@@ -917,6 +917,8 @@ func (h *Hub) extAppCall(ctx context.Context, from string, p assistantwire.AppCa
 		out, err = h.hubMachinesPairLink(ctx, from, a.Extension, a.Request)
 	case extwire.HubMachinesStatus:
 		out, err = h.hubMachinesStatus(from, a.Request)
+	case extwire.HubMachinesExec:
+		out, err = h.hubMachinesExec(ctx, from, a.Extension, a.Request)
 	default:
 		return nil, true, errors.New("hub: no method " + p.Method)
 	}

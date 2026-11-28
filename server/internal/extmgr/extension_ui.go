@@ -385,7 +385,7 @@ func (h *Manager) uiCall(ctx context.Context, id, uiID string, in uiRequest) (ex
 			return res, err
 		}
 		fit := func(v *extension.View) error {
-			dropped, err := extension.FitFor(v, slot, params.UIVersion, unsupported, h.uiFallbackLang(ctx, params.Locale))
+			dropped, err := extension.FitForExtension(v, slot, params.UIVersion, id, unsupported, h.uiFallbackLang(ctx, params.Locale))
 			if len(dropped) > 0 && params.UIVersion == extension.UIVersion {
 				h.extensions.logf("plugin %s: ui %s drew items this hub does not know (%s): left out", id, uiID, strings.Join(dropped, ", "))
 			}
@@ -419,7 +419,7 @@ func (h *Manager) uiCall(ctx context.Context, id, uiID string, in uiRequest) (ex
 				return extension.ActionResult{}, err
 			}
 		}
-		if err := extension.FitResultFor(&res, slot, params.UIVersion, unsupported, h.uiFallbackLang(ctx, params.Locale)); err != nil {
+		if err := extension.FitResultForExtension(&res, id, slot, params.UIVersion, unsupported, h.uiFallbackLang(ctx, params.Locale)); err != nil {
 			return extension.ActionResult{}, i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
 		}
 		if err := checkPushes(p.Manifest, item, &extension.View{Sections: []extension.Section{{Items: res.Items}}}, nil); err != nil {

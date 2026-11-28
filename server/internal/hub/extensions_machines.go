@@ -6,8 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/nwverse/persona/sdk/go/wire"
+	"github.com/nwverse/persona/server/internal/node"
+	"github.com/nwverse/persona/server/internal/nodeproto"
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -139,6 +143,72 @@ func (h *Hub) hubMachinesStatus(from string, raw json.RawMessage) (wire.Machines
 			res.LastSeen = m.LastSeen.UTC()
 		}
 		break
+	}
+	return res, nil
+}
+
+// hubMachinesExec handles extwire.HubMachinesExec from an extension after the manager verified
+// ScopeMachinesExec and received explicit owner approval via approveCard (#16741).
+func (h *Hub) hubMachinesExec(ctx context.Context, from, extID string, raw json.RawMessage) (wire.MachinesExecResult, error) {
+	if extID == "" {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: "invalid_params", Message: "extension id is required"}
+	}
+	var p wire.MachinesExecParams
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: "invalid_params", Message: "params are required"}
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&p); err != nil {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: "invalid_params", Message: err.Error()}
+	}
+	if err := node.ValidateMachinesExecParams(&p); err != nil {
+		return wire.MachinesExecResult{}, err
+	}
+	caller := from
+	if caller == "" {
+		caller = devicesOwner
+	}
+	if h.knownEntry(p.MachineID) != nil && h.entryOwner(p.MachineID) != caller {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: codeOtherManager, Message: errOtherManager.Error()}
+	}
+	if h.machinePending(p.MachineID) {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: "machine_pending", Message: "computer is pending owner confirmation"}
+	}
+	m := h.localMachine(p.MachineID)
+	if m == nil {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: "not_found", Message: "unknown machine"}
+	}
+	if h.entryOwner(m.cfg.ID) != caller {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: codeOtherManager, Message: errOtherManager.Error()}
+	}
+	if h.machinePending(m.cfg.ID) {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: "machine_pending", Message: "computer is pending owner confirmation"}
+	}
+	if !m.isOnline() {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: "machine_offline", Message: "computer is offline"}
+	}
+	if !m.hasCapability(nodeproto.MachinesExec) {
+		return wire.MachinesExecResult{}, &rpc.Error{Code: proto.CodeNodeOutdated, Message: "node does not support machines.exec; upgrade the node"}
+	}
+	p.MachineID = m.cfg.ID
+	timeoutMs := p.TimeoutMs
+	if timeoutMs <= 0 {
+		timeoutMs = 20000
+	}
+	// Give the node slight headroom past the command timeout so it can return timed_out=true cleanly.
+	callCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond+5*time.Second)
+	defer cancel()
+	var res wire.MachinesExecResult
+	if err := m.call(callCtx, "machines.exec", p, &res); err != nil {
+		var re *rpc.Error
+		if errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method") {
+			return wire.MachinesExecResult{}, &rpc.Error{Code: proto.CodeNodeOutdated, Message: "node does not support machines.exec; upgrade the node"}
+		}
+		return wire.MachinesExecResult{}, err
+	}
+	if res.MachineID == "" {
+		res.MachineID = m.cfg.ID
 	}
 	return res, nil
 }

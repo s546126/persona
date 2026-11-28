@@ -201,12 +201,30 @@ sealed interface AssistantOpenTarget {
     data class Task(val id: String) : AssistantOpenTarget
     data class Knowledge(val path: String) : AssistantOpenTarget
     data class File(val machine: String, val path: String) : AssistantOpenTarget
+    data class Terminal(val machine: String) : AssistantOpenTarget
+    data class ExtensionTerminal(val extension: String, val target: String) : AssistantOpenTarget
 }
 
 object AssistantOpen {
+    private val extIdPattern = Regex("^[a-z0-9][a-z0-9_-]{0,63}$")
+
+    private fun validTerminalSegment(s: String): Boolean =
+        s.isNotEmpty() && s.length <= 128 && s != "." && s != ".." &&
+            s.none { it.isISOControl() || it.isWhitespace() || it == '/' || it == '\\' || it == '?' || it == '#' }
+
+    /** Terminal targets always require explicit owner confirmation before navigation. */
+    fun requiresConfirmation(value: String?): Boolean {
+        if (value == null) return false
+        return when (target(value)) {
+            is AssistantOpenTarget.Terminal, is AssistantOpenTarget.ExtensionTerminal -> true
+            else -> false
+        }
+    }
+
     /**
      * [value] as a target, or null: https without credentials, or `persona://`
-     * `session/<machine>/<session>`, `task/<id>`, `kb/<relative path>`, `file/<machine>/<absolute path>` with each
+     * `session/<machine>/<session>`, `task/<id>`, `kb/<relative path>`, `file/<machine>/<absolute path>`,
+     * `terminal/<machine_id>`, or `ext-terminal/<ext_id>/<target_id>` with each
      * segment escaped once and nothing else. Never anything to hand to another app.
      */
     fun target(value: String): AssistantOpenTarget? {
@@ -229,6 +247,9 @@ object AssistantOpen {
             "task" -> if (decoded.size == 1) AssistantOpenTarget.Task(decoded[0]) else null
             "kb" -> if (decoded.none { it == "." || it == ".." }) AssistantOpenTarget.Knowledge(decoded.joinToString("/")) else null
             "file" -> if (decoded.size == 2 && !decoded[0].contains('/') && decoded[1].startsWith("/")) AssistantOpenTarget.File(decoded[0], decoded[1]) else null
+            "terminal" -> if (decoded.size == 1 && validTerminalSegment(decoded[0])) AssistantOpenTarget.Terminal(decoded[0]) else null
+            "ext-terminal" -> if (decoded.size == 2 && extIdPattern.matches(decoded[0]) && validTerminalSegment(decoded[1]))
+                AssistantOpenTarget.ExtensionTerminal(decoded[0], decoded[1]) else null
             else -> null
         }
     }

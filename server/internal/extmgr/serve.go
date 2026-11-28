@@ -67,6 +67,7 @@ func (h *Manager) Run(ctx context.Context) error {
 	go h.extensionUpgradeLoop(ctx)
 	go h.extensionMetricsLoop(ctx)
 	go h.pageLoop(ctx)
+	go h.extTerminalLoop(ctx)
 	go h.sentLedgerLoop(ctx)
 	go h.larkSyncLoop(ctx) // the Lark user sync's daily runs (larksync_host.go)
 	h.apiMux = http.NewServeMux()
@@ -76,6 +77,7 @@ func (h *Manager) Run(ctx context.Context) error {
 	go h.inboxManagerConnected() // the assistant is here: its inbox gets a full round now, as when it connected to the hub
 	<-ctx.Done()
 	h.pageDropExtension("")
+	h.extTerminalDropExtension("")
 	h.stopExtensions()
 	h.pageStopDelivery()
 	return nil
@@ -387,6 +389,13 @@ func (h *Manager) Request(ctx context.Context, method string, params json.RawMes
 		return handleExtensionRequest(extwire.UIStreamMethod, params, pageError("invalid"), func(call extwire.UIStreamCall) (buswire.None, error) {
 			return h.requestUIStream(ctx, call)
 		})
+	case extwire.MethodExtTerminal:
+		if len(params) > 128<<10 {
+			return nil, true, invalidExtensionParams("extension terminal frame too large")
+		}
+		return handleExtensionRequest(extwire.ExtTerminalMethod, params, invalidExtensionParams("invalid extension terminal call"), func(call extwire.ExtTerminalCall) (buswire.None, error) {
+			return h.requestExtTerminal(ctx, call)
+		})
 	case extwire.MethodAccept:
 		invalid := invalidExtensionParams(method + " needs an id")
 		return handleExtensionRequest(extwire.AcceptMethod, params, invalid, func(a extwire.Accept) (buswire.None, error) {
@@ -485,6 +494,13 @@ func (h *Manager) Event(name string, params json.RawMessage) bool {
 		var who extwire.UIPrincipal
 		if json.Unmarshal(params, &who) == nil {
 			go h.pageDisconnect(who)
+		}
+		return true
+	}
+	if name == extwire.EventExtTerminalConnectionGone {
+		var who extwire.UIPrincipal
+		if json.Unmarshal(params, &who) == nil {
+			go h.extTerminalDisconnect(who)
 		}
 		return true
 	}

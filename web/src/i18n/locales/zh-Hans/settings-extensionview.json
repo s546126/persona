@@ -14,5 +14,15 @@
   "updating": "正在更新…",
   "setup_title": "设置 {name}",
   "missing_settings": "必填设置",
-  "open_settings": "打开扩展设置"
+  "open_settings": "打开扩展设置",
+  "confirm_open_terminal": "确认打开机器「{machine}」的原生终端？",
+  "confirm_open_ext_terminal": "确认打开扩展「{extension}」提供的交互式终端「{target}」？",
+  "terminal_connect": "连接",
+  "terminal_connecting": "正在连接…",
+  "terminal_close": "关闭会话",
+  "terminal_closed": "会话已关闭",
+  "terminal_reconnect": "重新连接",
+  "terminal_error": "连接出错",
+  "terminal_full_device_only": "交互式终端仅支持完整权限设备。",
+  "no_panes": "这台机器当前没有打开的终端窗口。"
 }

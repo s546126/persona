@@ -170,6 +170,7 @@ type Manager struct {
 	legacyCalls   legacyCalls
 	uiPages       pageSessions
 	uiDelivery    pageDelivery
+	extTerms      extTerminalManager
 	agents        *agents.Service
 	bots          botHub
 	channels      channelsHub

@@ -1,4 +1,4 @@
-const views = ["work", "monitoring", "files", "storage", "diagnostics", "procs", "services", "toolchain", "network", "management", "config"] as const;
+const views = ["work", "monitoring", "terminal", "files", "storage", "diagnostics", "procs", "services", "toolchain", "network", "management", "config"] as const;
 export type MachineSubview = typeof views[number];
 export interface MachineLocation {
   subview?: MachineSubview;

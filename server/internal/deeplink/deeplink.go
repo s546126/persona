@@ -95,6 +95,14 @@ func Machines() string { return "/machines" }
 // Machine is one computer.
 func Machine(id string) string { return "/machines/" + seg(id) }
 
+// MachineTerminal is a computer's native terminal subview (/machines/<id>/terminal).
+func MachineTerminal(id string) string { return "/machines/" + seg(id) + "/terminal" }
+
+// ExtensionTerminal is an interactive PTY terminal provided by an extension (/extension/<ext>/terminal/<target>).
+func ExtensionTerminal(extension, target string) string {
+	return "/extension/" + seg(extension) + "/terminal/" + seg(target)
+}
+
 // settingsItems is the query key that names an item of a settings tab, for the tabs that have one
 // (web/src/views/settings/nav.ts).
 var settingsItems = map[string]string{"models": "purpose", "channels": "channel", "extensions": "extension", "connectors": "connector"}

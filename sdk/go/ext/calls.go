@@ -259,6 +259,12 @@ func (h *Hub) MachinesStatus(ctx context.Context, p wire.MachinesStatusParams) (
 	return callHub[wire.MachinesStatusResult](ctx, h, "machines.status", p)
 }
 
+// MachinesExec executes one bounded command on a confirmed, online computer after the owner approves it on a
+// confirmation card (permission machines.exec, granted by name only; #16741).
+func (h *Hub) MachinesExec(ctx context.Context, p wire.MachinesExecParams) (wire.MachinesExecResult, error) {
+	return callHub[wire.MachinesExecResult](ctx, h, "machines.exec", p)
+}
+
 // BrowserMachines lists computers that have a browser backend enabled (permission browser.run; #12866).
 func (h *Hub) BrowserMachines(ctx context.Context, p wire.BrowserMachinesParams) (wire.BrowserMachinesResult, error) {
 	return callHub[wire.BrowserMachinesResult](ctx, h, "browser.machines", p)
